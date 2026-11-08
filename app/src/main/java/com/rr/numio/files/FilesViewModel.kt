@@ -21,6 +21,10 @@ import com.rr.numio.files.data.SortOrder
 import com.rr.numio.files.data.Storage
 import com.rr.numio.files.data.Trash
 import com.rr.numio.files.data.TrashEntry
+import com.rr.numio.files.data.ZipNode
+import com.rr.numio.files.data.Zips
+import com.rr.numio.files.data.uniqueName
+import android.net.Uri
 import com.rr.numio.files.data.sortItems
 import com.rr.numio.files.ui.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
@@ -36,10 +40,15 @@ enum class Tab(val label: String) { HOME("Home"), BROWSE("Browse"), STARRED("Sta
 sealed interface Overlay {
     data class Cat(val category: Category) : Overlay
     data object Search : Overlay
+    /** Looking inside a ZIP; [inner] is the folder in it ("" = top). */
+    data class Zip(val path: String, val inner: String, val outside: Boolean) : Overlay
 }
 
-/** Files picked for Copy or Move, waiting for "Paste here". */
-data class Pending(val paths: List<String>, val move: Boolean)
+/**
+ * Files picked for Copy or Move, waiting for "Paste here".
+ * With [zip] set, [paths] are entries of that ZIP to extract into the folder.
+ */
+data class Pending(val paths: List<String>, val move: Boolean, val zip: String? = null, val zipInner: String = "")
 
 class FilesViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = Prefs(app)
@@ -160,6 +169,120 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     fun categoryItems(c: Category): List<FileItem> =
         sortItems(home?.categoryFiles?.get(c).orEmpty(), sort)
 
+    // ZIP files
+
+    private var zipNodes: List<ZipNode> = emptyList()
+    var zipItems by mutableStateOf<List<FileItem>>(emptyList()); private set
+    var zipError by mutableStateOf<String?>(null); private set
+
+    /** Opens a ZIP like a folder. [outside]: it came from another app (a copy in the cache). */
+    fun openZip(path: String, outside: Boolean = false) {
+        selected.clear()
+        zipNodes = emptyList()
+        zipItems = emptyList()
+        zipError = null
+        overlay = Overlay.Zip(path, "", outside)
+        viewModelScope.launch {
+            val nodes = withContext(Dispatchers.IO) { runCatching { Zips.entries(File(path)) }.getOrNull() }
+            if (nodes == null) zipError = "This ZIP can't be opened. It may be damaged or password-protected."
+            else {
+                zipNodes = nodes
+                showZipFolder("")
+            }
+        }
+    }
+
+    /** A ZIP handed over by another app ("Open with Files"): copied into the cache first. */
+    fun openZipFrom(uri: Uri, name: String) {
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val copy = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = File(ctx.cacheDir, "opened").apply { deleteRecursively(); mkdirs() }
+                    val out = File(dir, name.ifBlank { "archive.zip" })
+                    ctx.contentResolver.openInputStream(uri)?.use { input -> out.outputStream().use { input.copyTo(it) } }
+                    out.takeIf { it.length() > 0 }
+                }.getOrNull()
+            }
+            if (copy == null) message = "Couldn't open that ZIP" else openZip(copy.absolutePath, outside = true)
+        }
+    }
+
+    private fun showZipFolder(inner: String) {
+        val z = overlay as? Overlay.Zip ?: return
+        selected.clear()
+        overlay = z.copy(inner = inner)
+        zipItems = sortItems(Zips.children(zipNodes, inner), sort)
+    }
+
+    fun zipInto(inner: String) = showZipFolder(inner)
+
+    /** One folder up inside the ZIP; false at its top. */
+    fun zipUp(): Boolean {
+        val z = overlay as? Overlay.Zip ?: return false
+        if (z.inner.isEmpty()) return false
+        showZipFolder(z.inner.substringBeforeLast('/', ""))
+        return true
+    }
+
+    /** Pulls one file out to the cache and hands it to [open]. */
+    fun openZipEntry(path: String, open: (String) -> Unit) {
+        val z = overlay as? Overlay.Zip ?: return
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val f = withContext(Dispatchers.IO) {
+                runCatching { Zips.extractOne(File(z.path), path, File(ctx.cacheDir, "zipview").apply { deleteRecursively() }) }.getOrNull()
+            }
+            if (f == null) message = "Couldn't open that file" else open(f.absolutePath)
+        }
+    }
+
+    /**
+     * Extracts next to the ZIP into a new folder named after it
+     * (into Download for a ZIP from another app). Empty selection = everything.
+     */
+    fun extractHere() {
+        val z = overlay as? Overlay.Zip ?: return
+        val chosen = selected.toList()
+        selected.clear()
+        val zip = File(z.path)
+        val parent = if (z.outside) Storage.downloads else (zip.parentFile ?: Storage.root)
+        run("Extracting…") {
+            val base = zip.name.substringBeforeLast('.').ifBlank { "Extracted" }
+            val target = File(parent, uniqueName(base) { File(parent, it).exists() })
+            val failed = Zips.extract(zip, chosen, z.inner, target)
+            FileOps.reindex(getApplication(), listOf(target.absolutePath))
+            if (failed == 0) "Extracted to ${target.name}" else "Extracted to ${target.name}, $failed files couldn't be"
+        }
+    }
+
+    /** Pick a folder in Browse, then "Paste here" extracts into it. */
+    fun startExtractTo() {
+        val z = overlay as? Overlay.Zip ?: return
+        val chosen = selected.toList().ifEmpty { zipItems.map { it.path } }
+        pending = Pending(chosen, move = false, zip = z.path, zipInner = z.inner)
+        selected.clear()
+        overlay = null
+        tab = Tab.BROWSE
+        reloadDir()
+    }
+
+    /** Makes a ZIP of the selected things, in the folder of the first one. */
+    fun makeZip(name: String) {
+        val sources = selected.map(::File)
+        selected.clear()
+        if (sources.isEmpty()) return
+        val parent = sources[0].parentFile ?: return
+        run("Making ZIP…") {
+            val n = name.trim().let { if (it.endsWith(".zip", ignoreCase = true)) it else "$it.zip" }
+            val dest = File(parent, uniqueName(n) { File(parent, it).exists() })
+            if (Zips.create(sources, dest)) {
+                FileOps.reindex(getApplication(), listOf(dest.absolutePath))
+                "Made ${dest.name}"
+            } else "Couldn't make the ZIP"
+        }
+    }
+
     fun openSearch() {
         selected.clear()
         overlay = Overlay.Search
@@ -226,6 +349,11 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         val target = dir
         pending = null
         run(if (p.move) "Moving…" else "Copying…") {
+            if (p.zip != null) {
+                val failed = Zips.extract(File(p.zip), p.paths, p.zipInner, target)
+                FileOps.reindex(getApplication(), listOf(target.absolutePath))
+                return@run if (failed == 0) "Extracted here" else "Extracted, $failed files couldn't be"
+            }
             val sources = p.paths.map(::File).filter { it.exists() }
             val failed = if (p.move) FileOps.move(sources, target) else FileOps.copy(sources, target)
             if (p.move) {
@@ -333,6 +461,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         sort = s
         prefs.sort = s
         dirItems = sortItems(dirItems, s)
+        zipItems = sortItems(zipItems, s)
         starredItems = sortItems(starredItems, s)
         results = sortItems(results, s)
     }

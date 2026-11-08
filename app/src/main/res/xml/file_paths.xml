@@ -2,5 +2,7 @@
 <paths>
     <!-- Phone storage, so any file can be opened in or shared to another app -->
     <external-path name="storage" path="." />
+    <!-- Files pulled out of a ZIP to open in another app -->
+    <cache-path name="cache" path="." />
     <root-path name="root" path="." />
 </paths>

@@ -72,12 +72,20 @@ fun FilesApp(
         var confirmForever by remember { mutableStateOf(false) }
         var confirmEmpty by remember { mutableStateOf(false) }
 
+        // ZIPs open inside Files; everything else in the app that handles it
+        val open: (String) -> Unit = { p ->
+            if (com.rr.numio.files.data.extOf(p) == "zip") vm.openZip(p) else onOpen(p)
+        }
+        var makingZip by remember { mutableStateOf<String?>(null) }
+
         val overlay = vm.overlay
+        val inZip = overlay is Overlay.Zip
         val inTrash = overlay == Overlay.Cat(Category.TRASH)
 
         BackHandler(enabled = vm.selected.isNotEmpty() || overlay != null || vm.tab != Tab.HOME || vm.pending != null) {
             when {
                 vm.selected.isNotEmpty() -> vm.clearSelection()
+                inZip && vm.zipUp() -> Unit
                 overlay != null -> vm.closeOverlay()
                 vm.tab == Tab.BROWSE && vm.up() -> Unit
                 vm.pending != null -> vm.cancelPending()
@@ -90,15 +98,22 @@ fun FilesApp(
             Box(Modifier.weight(1f)) {
                 when {
                     overlay is Overlay.Cat && overlay.category == Category.TRASH -> TrashScreen(vm) { confirmEmpty = true }
-                    overlay is Overlay.Cat -> CategoryScreen(vm, overlay.category, onOpen)
-                    overlay == Overlay.Search -> SearchScreen(vm, onOpen)
-                    vm.tab == Tab.HOME -> HomeScreen(vm, onOpen)
-                    vm.tab == Tab.BROWSE -> BrowseScreen(vm, onOpen) { newFolder = true }
-                    vm.tab == Tab.STARRED -> StarredScreen(vm, onOpen)
+                    overlay is Overlay.Zip -> ZipScreen(vm, overlay) { entry -> vm.openZipEntry(entry, onOpen) }
+                    overlay is Overlay.Cat -> CategoryScreen(vm, overlay.category, open)
+                    overlay == Overlay.Search -> SearchScreen(vm, open)
+                    vm.tab == Tab.HOME -> HomeScreen(vm, open)
+                    vm.tab == Tab.BROWSE -> BrowseScreen(vm, open) { newFolder = true }
+                    vm.tab == Tab.STARRED -> StarredScreen(vm, open)
                     else -> SettingsScreen(vm, onOpenLink)
                 }
             }
             when {
+                inZip -> ActionBar(
+                    listOf(
+                        Action(if (vm.selected.isEmpty()) "Extract all here" else "Extract here", FIcons.Download) { vm.extractHere() },
+                        Action("Extract to…", FIcons.Move) { vm.startExtractTo() },
+                    ),
+                )
                 vm.selected.isNotEmpty() && inTrash -> ActionBar(
                     listOf(
                         Action("Restore", FIcons.Restore) { vm.restoreSelected() },
@@ -111,6 +126,10 @@ fun FilesApp(
                         Action("Move", FIcons.Move) { vm.startCopy(move = true) },
                         Action("Share", FIcons.Share) { onShare(vm.selected.toList()) },
                         Action("Rename", FIcons.Rename, enabled = vm.selected.size == 1) { renaming = vm.selected.firstOrNull() },
+                        Action("Zip", FIcons.Archive) {
+                            val first = vm.selected.first().substringAfterLast('/')
+                            makingZip = if (vm.selected.size == 1) first.substringBeforeLast('.').ifBlank { first } else "Archive"
+                        },
                         Action("Delete", FIcons.Trash, danger = true) { confirmDelete = true },
                     ),
                 )
@@ -131,6 +150,12 @@ fun FilesApp(
                 renaming = null
                 vm.clearSelection()
                 vm.rename(path, name)
+            }
+        }
+        makingZip?.let { suggested ->
+            NameDialog(title = "Make ZIP", initial = "$suggested.zip", confirm = "Make ZIP", onDismiss = { makingZip = null }) { name ->
+                makingZip = null
+                vm.makeZip(name)
             }
         }
         if (newFolder) {
@@ -262,7 +287,7 @@ private fun PasteBar(vm: FilesViewModel) {
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                (if (p.move) "Moving " else "Copying ") + if (n == 1) "1 item" else "$n items",
+                (if (p.zip != null) "Extracting " else if (p.move) "Moving " else "Copying ") + if (n == 1) "1 item" else "$n items",
                 style = MaterialTheme.typography.titleSmall,
             )
             Text("Open the folder, then paste", style = MaterialTheme.typography.bodySmall)

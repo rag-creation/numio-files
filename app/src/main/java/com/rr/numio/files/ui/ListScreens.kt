@@ -303,3 +303,45 @@ fun SearchScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit) {
         )
     }
 }
+
+@Composable
+fun ZipScreen(vm: FilesViewModel, zip: com.rr.numio.files.Overlay.Zip, onOpenEntry: (String) -> Unit) {
+    val selecting = vm.selected.isNotEmpty()
+    val zipName = zip.path.substringAfterLast('/')
+    Column {
+        if (selecting) {
+            SelectionHeader(vm.selected.size, vm::clearSelection, { vm.selectAll(vm.zipItems.map { it.path }) })
+        } else {
+            TitleHeader(zipName, onBack = { if (!vm.zipUp()) vm.closeOverlay() }) { SortButton(vm) }
+        }
+        LazyColumn(Modifier.fillMaxSize()) {
+            item {
+                Text(
+                    (if (zip.inner.isEmpty()) "Inside the ZIP" else "ZIP › " + zip.inner.replace("/", " › ")) +
+                        " · ${vm.zipItems.size} items",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp),
+                )
+            }
+            vm.zipError?.let { err -> item { EmptyNote("Can't open", err) } }
+            items(vm.zipItems, key = { it.path }) { f ->
+                FileRow(
+                    item = f,
+                    meta = if (f.isDir) metaFor(f) else formatSize(f.size) + if (f.modified > 0) " · ${whenText(f.modified)}" else "",
+                    selecting = selecting,
+                    selected = f.path in vm.selected,
+                    starred = false,
+                    onClick = {
+                        when {
+                            selecting -> vm.toggle(f.path)
+                            f.isDir -> vm.zipInto(f.path)
+                            else -> onOpenEntry(f.path)
+                        }
+                    },
+                    onLongClick = { vm.toggle(f.path) },
+                )
+            }
+            item { Spacer(Modifier.height(24.dp)) }
+        }
+    }
+}

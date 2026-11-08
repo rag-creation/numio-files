@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.webkit.MimeTypeMap
 import android.widget.Toast
@@ -37,6 +38,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) handle(intent)
         setContent {
             FilesTheme(theme = vm.appTheme) {
                 FilesApp(
@@ -48,6 +50,30 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+
+    /** A ZIP opened from another app with "Open with Files". */
+    private fun handle(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        val uri = intent.data ?: return
+        if (uri.scheme == "file") {
+            uri.path?.let { vm.openZip(it, outside = true) }
+            return
+        }
+        var name = "archive.zip"
+        try {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) name = c.getString(0)
+            }
+        } catch (e: Exception) {
+            // Some apps don't say the name
+        }
+        vm.openZipFrom(uri, name.substringAfterLast('/'))
     }
 
     override fun onResume() {
