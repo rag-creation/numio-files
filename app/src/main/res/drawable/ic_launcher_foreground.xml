@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder icon: the soft Numio N on an amber folder, inside the 66dp safe circle.
+     To be swapped for RR's own Files icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFC21A" android:pathData="M35,32 H47 Q49,32 50.4,33.4 L54,37 H73 Q77,37 77,41 V72 Q77,76 73,76 H35 Q31,76 31,72 V36 Q31,32 35,32 Z" />
+    <path android:strokeColor="#FF0F0F0E" android:strokeWidth="2.2" android:strokeLineCap="round" android:pathData="M31,44 H77" />
+    <group android:translateY="7">
+        <path android:fillColor="#FF0F0F0E" android:strokeColor="#FF0F0F0E" android:strokeWidth="1.13" android:strokeLineJoin="round" android:pathData="M43.05,43.92 Q43.05,42.72 44.05,43.39 L49.77,47.21 Q50.77,47.88 49.80,48.59 L47.67,50.16 Q46.71,50.87 46.71,52.07 L46.71,56.72 Q46.71,57.92 45.51,57.92 L44.25,57.92 Q43.05,57.92 43.05,56.72 Z" />
+        <path android:fillColor="#FF0F0F0E" android:strokeColor="#FF0F0F0E" android:strokeWidth="1.13" android:strokeLineJoin="round" android:pathData="M54.96,44.25 Q54.96,43.06 56.15,43.06 L57.22,43.06 Q58.41,43.06 58.41,44.25 L58.41,56.59 Q58.41,57.79 57.43,57.10 L51.75,53.12 Q50.77,52.43 51.75,51.75 L53.97,50.22 Q54.96,49.54 54.96,48.34 Z" />
+        <path android:fillColor="#FF0F0F0E" android:pathData="M59.61,55.99 a2.13,2.13 0 1,1 4.26,0 a2.13,2.13 0 1,1 -4.26,0 Z" />
+    </group>
+</vector>
