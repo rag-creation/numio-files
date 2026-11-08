@@ -30,6 +30,8 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,11 +54,15 @@ import com.rr.numio.files.data.Category
 import com.rr.numio.files.ui.theme.Numio
 import kotlinx.coroutines.delay
 
+/** "Open with…" from the selection header, handed down from the activity. */
+val LocalOpenWith = staticCompositionLocalOf<(String) -> Unit> { {} }
+
 @Composable
 fun FilesApp(
     vm: FilesViewModel,
     onAskAccess: () -> Unit,
     onOpen: (String) -> Unit,
+    onOpenWith: (String) -> Unit,
     onShare: (List<String>) -> Unit,
     onOpenLink: (String) -> Unit,
 ) {
@@ -93,6 +99,7 @@ fun FilesApp(
             }
         }
 
+        CompositionLocalProvider(LocalOpenWith provides onOpenWith) {
         Column(Modifier.fillMaxSize()) {
             if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = Numio.Amber, trackColor = Numio.Bg)
             Box(Modifier.weight(1f)) {
@@ -136,6 +143,8 @@ fun FilesApp(
                 vm.pending != null && vm.tab == Tab.BROWSE && overlay == null -> PasteBar(vm)
                 overlay == null -> NavBar(vm)
             }
+        }
+
         }
 
         Snack(vm)

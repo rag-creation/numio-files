@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
                     vm = vm,
                     onAskAccess = ::askAccess,
                     onOpen = ::openFile,
+                    onOpenWith = ::openWith,
                     onShare = ::share,
                     onOpenLink = ::openLink,
                 )
@@ -106,14 +107,22 @@ class MainActivity : ComponentActivity() {
     private fun mimeOf(f: File): String =
         MimeTypeMap.getSingleton().getMimeTypeFromExtension(extOf(f.name)) ?: "*/*"
 
-    /** Opens a file in whichever app handles its type. */
-    private fun openFile(path: String) {
+    /**
+     * Opens a file the normal Android way: straight into the default app for its
+     * type, or Android's own "Just once / Always" question if none is set yet.
+     */
+    private fun openFile(path: String) = launchView(path, chooser = false)
+
+    /** Always shows the list of apps, to pick a different one this time. */
+    private fun openWith(path: String) = launchView(path, chooser = true)
+
+    private fun launchView(path: String, chooser: Boolean) {
         val f = File(path)
         try {
             val view = Intent(Intent.ACTION_VIEW)
                 .setDataAndType(uriFor(f), mimeOf(f))
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-            startActivity(Intent.createChooser(view, null))
+            startActivity(if (chooser) Intent.createChooser(view, null) else view)
         } catch (e: Exception) {
             Toast.makeText(this, "No app on this phone can open this file.", Toast.LENGTH_LONG).show()
         }

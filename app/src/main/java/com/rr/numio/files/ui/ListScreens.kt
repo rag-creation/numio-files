@@ -104,8 +104,22 @@ private fun SortButton(vm: FilesViewModel) {
     }
 }
 
+/** "Open with…" when exactly one file is picked, then the star. */
 @Composable
 private fun StarAction(vm: FilesViewModel) {
+    val one = vm.selected.singleOrNull()
+    val openWith = LocalOpenWith.current
+    if (one != null && java.io.File(one).isFile) {
+        IconBtn(FIcons.OpenWith, "Open with…") {
+            vm.clearSelection()
+            openWith(one)
+        }
+    }
+    StarOnly(vm)
+}
+
+@Composable
+private fun StarOnly(vm: FilesViewModel) {
     val all = vm.selected.all { it in vm.starred }
     IconBtn(if (all) FIcons.StarFilled else FIcons.Star, if (all) "Remove from Starred" else "Add to Starred", tint = Numio.AmberText) {
         vm.toggleStarSelected()
