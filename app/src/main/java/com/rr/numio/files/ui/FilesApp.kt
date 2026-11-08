@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -103,7 +105,7 @@ fun FilesApp(
 
         CompositionLocalProvider(LocalOpenWith provides onOpenWith) {
         Column(Modifier.fillMaxSize()) {
-            if (vm.busy) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = Numio.Amber, trackColor = Numio.Bg)
+            if (vm.busy && vm.progress == null) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = Numio.Amber, trackColor = Numio.Bg)
             Box(Modifier.weight(1f)) {
                 when {
                     overlay is Overlay.Cat && overlay.category == Category.TRASH -> TrashScreen(vm) { confirmEmpty = true }
@@ -117,6 +119,7 @@ fun FilesApp(
                     else -> SettingsScreen(vm, onOpenLink)
                 }
             }
+            vm.progress?.let { ProgressCard(it, onCancel = vm::cancelJob) }
             when {
                 overlay == Overlay.Cleanup -> if (vm.selected.isNotEmpty() && !vm.cleanScanning) {
                     val n = vm.selected.size
@@ -196,6 +199,7 @@ fun FilesApp(
                 vm.deleteSelected()
             }
         }
+        vm.details?.let { rows -> DetailsSheet(rows, vm.detailsPath, onClose = vm::closeDetails) }
         if (confirmEmptyFolders) {
             val n = vm.selected.size
             Confirm(
@@ -302,6 +306,83 @@ private fun ActionBar(actions: List<Action>) {
             }
         }
     }
+}
+
+/** Copying, moving, extracting: how far, and a way to stop. */
+@Composable
+private fun ProgressCard(p: com.rr.numio.files.data.JobProgress, onCancel: () -> Unit) {
+    val frac = if (p.total > 0) (p.done.toFloat() / p.total).coerceIn(0f, 1f) else 0f
+    Column(
+        Modifier
+            .padding(start = 14.dp, end = 14.dp, top = 6.dp, bottom = 6.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(Numio.SurfaceHigh)
+            .border(1.dp, Numio.Line, RoundedCornerShape(22.dp))
+            .padding(start = 18.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(p.title, style = MaterialTheme.typography.titleSmall)
+                Text(
+                    p.current.ifEmpty { "Getting ready…" },
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.MiddleEllipsis,
+                )
+            }
+            TextButton(onClick = onCancel) { Text("Cancel", color = Numio.Error, fontWeight = FontWeight.Bold) }
+        }
+        Row(Modifier.padding(end = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            LinearProgressIndicator(
+                progress = { frac },
+                modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
+                color = Numio.Amber,
+                trackColor = Numio.Line,
+                drawStopIndicator = {},
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                if (p.total > 0) "${com.rr.numio.files.data.formatSize(p.done)} of ${com.rr.numio.files.data.formatSize(p.total)}" else "",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+/** Long-press › Details: path, size, dates, and photo / video / APK info. */
+@Composable
+private fun DetailsSheet(rows: List<Pair<String, String>>, path: String?, onClose: () -> Unit) {
+    val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
+    var copied by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onClose,
+        containerColor = Numio.Surface,
+        title = { Text("Details", style = MaterialTheme.typography.titleLarge) },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                rows.forEach { (label, value) ->
+                    Column {
+                        if (label.isNotEmpty()) Text(label.uppercase(), style = MaterialTheme.typography.labelSmall, color = Numio.TextDim)
+                        Text(value, style = MaterialTheme.typography.bodyMedium, color = Numio.Text)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onClose) { Text("Done", color = Numio.AmberText, fontWeight = FontWeight.Bold) } },
+        dismissButton = {
+            if (path != null) {
+                TextButton(onClick = {
+                    clipboard.setText(androidx.compose.ui.text.AnnotatedString(path))
+                    copied = true
+                }) { Text(if (copied) "Path copied" else "Copy path", color = Numio.Text) }
+            }
+        },
+    )
 }
 
 /** One big amber button at the bottom. */

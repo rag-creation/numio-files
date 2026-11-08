@@ -51,16 +51,19 @@ object Zips {
      * Extracts [chosen] paths (folders include everything inside; empty = the whole ZIP)
      * into [target], dropping the [inner] folder part of each path. Returns how many files failed.
      */
-    fun extract(zip: File, chosen: List<String>, inner: String, target: File): Int {
+    fun extract(zip: File, chosen: List<String>, inner: String, target: File, p: JobProgress? = null): Int {
         target.mkdirs()
         val root = target.canonicalPath + File.separator
         val prefix = if (inner.isEmpty()) "" else "$inner/"
         var failed = 0
         ZipFile(zip).use { zf ->
+            fun wants(path: String) =
+                if (chosen.isEmpty()) path.startsWith(prefix) else chosen.any { path == it || path.startsWith("$it/") }
+            if (p != null) p.total = zf.entries().asSequence().filter { !it.isDirectory && wants(clean(it.name)) }.sumOf { it.size.coerceAtLeast(0) }
             for (e in zf.entries()) {
                 val path = clean(e.name)
                 if (path.isEmpty() || path.startsWith("__MACOSX")) continue
-                val wanted = if (chosen.isEmpty()) path.startsWith(prefix) else chosen.any { path == it || path.startsWith("$it/") }
+                val wanted = wants(path)
                 if (!wanted) continue
                 val rel = path.removePrefix(prefix)
                 if (rel.isEmpty()) continue
@@ -76,9 +79,13 @@ object Zips {
                             val parent = out.parentFile ?: target
                             out = File(parent, uniqueName(out.name) { File(parent, it).exists() })
                         }
-                        zf.getInputStream(e).use { input -> FileOutputStream(out).use { input.copyTo(it) } }
+                        p?.start(out.name)
+                        zf.getInputStream(e).use { input -> FileOutputStream(out).use { output -> copy(input, output, p) } }
                         if (e.time > 0) out.setLastModified(e.time)
                     }
+                } catch (ex: CancelledJob) {
+                    if (out.isFile) out.delete() // the half-written file
+                    throw ex
                 } catch (ex: Exception) {
                     failed++
                 }
@@ -99,7 +106,8 @@ object Zips {
     }
 
     /** Makes [dest] from files and folders, each kept under its own name. */
-    fun create(sources: List<File>, dest: File): Boolean = try {
+    fun create(sources: List<File>, dest: File, p: JobProgress? = null): Boolean = try {
+        p?.total = FileOps.sizeOf(sources)
         ZipOutputStream(FileOutputStream(dest)).use { zos ->
             for (src in sources) {
                 val base = src.parentFile ?: continue
@@ -110,8 +118,9 @@ object Zips {
                         zos.putNextEntry(ZipEntry("$rel/").apply { time = f.lastModified() })
                         zos.closeEntry()
                     } else {
+                        p?.start(f.name)
                         zos.putNextEntry(ZipEntry(rel).apply { time = f.lastModified() })
-                        f.inputStream().use { it.copyTo(zos) }
+                        f.inputStream().use { copy(it, zos, p) }
                         zos.closeEntry()
                     }
                 }
@@ -119,7 +128,19 @@ object Zips {
         }
         true
     } catch (e: Exception) {
-        dest.delete()
+        dest.delete() // also when cancelled: no half-made ZIP left behind
+        if (e is CancelledJob) throw e
         false
+    }
+
+    private fun copy(input: java.io.InputStream, output: java.io.OutputStream, p: JobProgress?) {
+        val buf = ByteArray(256 * 1024)
+        while (true) {
+            val n = input.read(buf)
+            if (n < 0) break
+            output.write(buf, 0, n)
+            p?.add(n.toLong())
+            p?.check()
+        }
     }
 }
