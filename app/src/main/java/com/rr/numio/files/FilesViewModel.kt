@@ -24,6 +24,8 @@ import com.rr.numio.files.data.TrashEntry
 import com.rr.numio.files.data.ZipNode
 import com.rr.numio.files.data.EmptyFolder
 import com.rr.numio.files.data.Cleanup
+import com.rr.numio.files.data.CancelledJob
+import com.rr.numio.files.data.JobProgress
 import com.rr.numio.files.data.Zips
 import com.rr.numio.files.data.uniqueName
 import android.net.Uri
@@ -252,10 +254,15 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         selected.clear()
         val zip = File(z.path)
         val parent = if (z.outside) Storage.downloads else (zip.parentFile ?: Storage.root)
-        run("Extracting…") {
+        runWithProgress("Extracting ${zip.name}") { prog ->
             val base = zip.name.substringBeforeLast('.').ifBlank { "Extracted" }
             val target = File(parent, uniqueName(base) { File(parent, it).exists() })
-            val failed = Zips.extract(zip, chosen, z.inner, target)
+            val failed = try {
+                Zips.extract(zip, chosen, z.inner, target, prog)
+            } catch (e: CancelledJob) {
+                target.deleteRecursively() // a new folder we just made: remove the partial extract
+                throw e
+            }
             FileOps.reindex(getApplication(), listOf(target.absolutePath))
             if (failed == 0) "Extracted to ${target.name}" else "Extracted to ${target.name}, $failed files couldn't be"
         }
@@ -278,10 +285,10 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         selected.clear()
         if (sources.isEmpty()) return
         val parent = sources[0].parentFile ?: return
-        run("Making ZIP…") {
-            val n = name.trim().let { if (it.endsWith(".zip", ignoreCase = true)) it else "$it.zip" }
+        val n = name.trim().let { if (it.endsWith(".zip", ignoreCase = true)) it else "$it.zip" }
+        runWithProgress("Making $n") { prog ->
             val dest = File(parent, uniqueName(n) { File(parent, it).exists() })
-            if (Zips.create(sources, dest)) {
+            if (Zips.create(sources, dest, prog)) {
                 FileOps.reindex(getApplication(), listOf(dest.absolutePath))
                 "Made ${dest.name}"
             } else "Couldn't make the ZIP"
@@ -358,6 +365,29 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // Details
+
+    /** Rows for the Details sheet; null when it's closed. */
+    var details by mutableStateOf<List<Pair<String, String>>?>(null); private set
+    var detailsPath by mutableStateOf<String?>(null); private set
+
+    fun showDetails() {
+        val paths = selected.toList()
+        if (paths.isEmpty()) return
+        detailsPath = paths.singleOrNull()
+        details = listOf("" to "Reading…")
+        viewModelScope.launch {
+            details = withContext(Dispatchers.IO) {
+                runCatching { com.rr.numio.files.data.Details.of(getApplication(), paths) }.getOrElse { listOf("" to "Couldn't read the details") }
+            }
+        }
+    }
+
+    fun closeDetails() {
+        details = null
+        detailsPath = null
+    }
+
     fun openSearch() {
         selected.clear()
         overlay = Overlay.Search
@@ -423,21 +453,31 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         val p = pending ?: return
         val target = dir
         pending = null
-        run(if (p.move) "Moving…" else "Copying…") {
+        val n = items(p.paths.size)
+        val title = when {
+            p.zip != null -> "Extracting $n"
+            p.move -> "Moving $n"
+            else -> "Copying $n"
+        }
+        runWithProgress(title) { prog ->
             if (p.zip != null) {
-                val failed = Zips.extract(File(p.zip), p.paths, p.zipInner, target)
-                FileOps.reindex(getApplication(), listOf(target.absolutePath))
-                return@run if (failed == 0) "Extracted here" else "Extracted, $failed files couldn't be"
+                val failed = try {
+                    Zips.extract(File(p.zip), p.paths, p.zipInner, target, prog)
+                } finally {
+                    FileOps.reindex(getApplication(), listOf(target.absolutePath))
+                }
+                return@runWithProgress if (failed == 0) "Extracted here" else "Extracted, $failed files couldn't be"
             }
             val sources = p.paths.map(::File).filter { it.exists() }
-            val failed = if (p.move) FileOps.move(sources, target) else FileOps.copy(sources, target)
-            if (p.move) {
-                starredPathsMoved(p.paths)
-            }
+            val r = if (p.move) FileOps.move(sources, target, prog) else FileOps.copy(sources, target, prog)
+            if (p.move) starredPathsMoved(p.paths.filter { !File(it).exists() })
             FileOps.reindex(getApplication(), p.paths + target.absolutePath)
-            val done = sources.size - failed
             val verb = if (p.move) "moved" else "copied"
-            if (failed == 0) "${items(done)} $verb" else "${items(done)} $verb, $failed couldn't be"
+            when {
+                r.cancelled -> "Stopped. ${items(r.done)} $verb; the unfinished one was removed."
+                r.failed == 0 -> "${items(r.done)} $verb"
+                else -> "${items(r.done)} $verb, ${r.failed} couldn't be"
+            }
         }
     }
 
@@ -542,6 +582,29 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Runs a file job off the main thread, then refreshes every list. */
+    /** The long job running now, for the progress card (null when none). */
+    var progress by mutableStateOf<JobProgress?>(null); private set
+
+    /** Like [run], with a progress card and a Cancel button. */
+    private fun runWithProgress(title: String, job: (JobProgress) -> String?) {
+        if (busy) return
+        val p = JobProgress(title)
+        progress = p
+        run(title) {
+            try {
+                job(p)
+            } catch (e: CancelledJob) {
+                "Stopped"
+            } finally {
+                progress = null
+            }
+        }
+    }
+
+    fun cancelJob() {
+        progress?.cancel()
+    }
+
     private fun run(label: String, job: () -> String?) {
         if (busy) return
         busy = true

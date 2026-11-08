@@ -115,6 +115,7 @@ private fun StarAction(vm: FilesViewModel) {
             openWith(one)
         }
     }
+    IconBtn(FIcons.Info, "Details") { vm.showDetails() }
     StarOnly(vm)
 }
 
