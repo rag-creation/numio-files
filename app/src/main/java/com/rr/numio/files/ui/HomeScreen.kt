@@ -121,7 +121,7 @@ private fun StorageCard(stats: HomeStats?, onCleanUp: () -> Unit) {
             Button(
                 onClick = onCleanUp,
                 colors = ButtonDefaults.buttonColors(containerColor = Numio.Amber, contentColor = Numio.OnAmber),
-            ) { Text("Clean up", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+            ) { Text("Clean up", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Numio.OnAmber) }
         }
         if (stats != null && stats.total > 0) {
             val parts = listOf(

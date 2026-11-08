@@ -202,7 +202,7 @@ private fun AccessScreen(onAskAccess: () -> Unit) {
             onClick = onAskAccess,
             colors = ButtonDefaults.buttonColors(containerColor = Numio.Amber, contentColor = Numio.OnAmber),
             modifier = Modifier.fillMaxWidth().height(52.dp),
-        ) { Text("Allow access", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+        ) { Text("Allow access", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Numio.OnAmber) }
     }
 }
 
@@ -272,7 +272,7 @@ private fun PasteBar(vm: FilesViewModel) {
         Button(
             onClick = vm::paste,
             colors = ButtonDefaults.buttonColors(containerColor = Numio.Amber, contentColor = Numio.OnAmber),
-        ) { Text("Paste here", fontWeight = FontWeight.Bold) }
+        ) { Text("Paste here", fontWeight = FontWeight.Bold, color = Numio.OnAmber) }
     }
 }
 
