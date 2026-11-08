@@ -243,7 +243,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
             val f = File(path)
             val dest = FileOps.rename(f, newName)
             if (dest == null) "Couldn't rename. That name may be taken." else {
-                if (path in starred) setStarred(starred - path + dest.absolutePath)
+                if (path in starred) saveStarred(starred - path + dest.absolutePath)
                 FileOps.reindex(getApplication(), listOf(path, dest.absolutePath))
                 null
             }
@@ -299,7 +299,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleStarSelected() {
         val paths = selected.toList()
         val allStarred = paths.all { it in starred }
-        setStarred(if (allStarred) starred - paths.toSet() else starred + paths)
+        saveStarred(if (allStarred) starred - paths.toSet() else starred + paths)
         selected.clear()
         reloadStarred()
         message = if (allStarred) "Removed from Starred" else "Added to Starred"
@@ -307,10 +307,10 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun starredPathsMoved(paths: List<String>) {
         val gone = paths.filter { it in starred }
-        if (gone.isNotEmpty()) setStarred(starred - gone.toSet())
+        if (gone.isNotEmpty()) saveStarred(starred - gone.toSet())
     }
 
-    private fun setStarred(s: Set<String>) {
+    private fun saveStarred(s: Set<String>) {
         starred = s
         prefs.starred = s
     }
