@@ -115,7 +115,7 @@ object Details {
             exif.getAttribute(ExifInterface.TAG_EXPOSURE_TIME)?.toDoubleOrNull()?.let {
                 if (it < 1) "1/${(1 / it).toInt()} s" else "${it.toInt()} s"
             },
-            exif.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY)?.let { "ISO $it" },
+            exif.getAttribute("ISOSpeedRatings")?.let { "ISO $it" },
         ).joinToString(" · ")
         if (shot.isNotEmpty()) add("Settings" to shot)
         if (exif.getLatLong(FloatArray(2))) add("Location data" to "Yes, this photo has GPS in it")
