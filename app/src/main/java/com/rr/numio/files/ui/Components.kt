@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,6 +24,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import android.graphics.Bitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import com.rr.numio.files.data.Category
+import com.rr.numio.files.data.Thumbs
+import com.rr.numio.files.data.categoryOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -92,21 +104,45 @@ fun TitleHeader(title: String, onBack: (() -> Unit)? = null, actions: @Composabl
     }
 }
 
-/** The square on the left of a row: an amber folder, or the file's extension. */
+/** The square on the left of a row: an amber folder, a preview, or the file's extension. */
 @Composable
-fun FileTile(item: FileItem, size: Int = 42) {
+fun FileTile(item: FileItem, size: Int = 48) {
     val shape = RoundedCornerShape(12.dp)
     if (item.isDir) {
         Box(
             Modifier.size(size.dp).clip(shape).background(Numio.AmberSoft),
             contentAlignment = Alignment.Center,
         ) { Icon(FIcons.Folder, null, tint = Numio.AmberText, modifier = Modifier.size(22.dp)) }
-    } else {
-        val label = item.ext.uppercase(Locale.ROOT).take(4).ifEmpty { "FILE" }
-        Box(
-            Modifier.size(size.dp).clip(shape).background(Numio.SurfaceHigh),
-            contentAlignment = Alignment.Center,
-        ) {
+        return
+    }
+    val context = LocalContext.current
+    val thumb by produceState<Bitmap?>(Thumbs.cached(item.path, item.modified), item.path, item.modified) {
+        if (value == null && Thumbs.hasPreview(item.name)) {
+            value = withContext(Dispatchers.IO) { Thumbs.load(context, item.path, item.modified) }
+        }
+    }
+    val cat = categoryOf(item.name)
+    Box(
+        Modifier.size(size.dp).clip(shape).background(Numio.SurfaceHigh),
+        contentAlignment = Alignment.Center,
+    ) {
+        val bmp = thumb
+        if (bmp != null) {
+            val isApk = cat == Category.APKS
+            Image(
+                bitmap = bmp.asImageBitmap(),
+                contentDescription = null,
+                contentScale = if (isApk) ContentScale.Fit else ContentScale.Crop,
+                modifier = if (isApk) Modifier.size((size - 8).dp) else Modifier.fillMaxSize(),
+            )
+            if (cat == Category.VIDEOS) {
+                Box(
+                    Modifier.size(18.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(FIcons.Play, "Video", tint = Color.White, modifier = Modifier.size(10.dp)) }
+            }
+        } else {
+            val label = item.ext.uppercase(Locale.ROOT).take(4).ifEmpty { "FILE" }
             Text(
                 label,
                 color = Numio.TextDim,
