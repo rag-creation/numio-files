@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Starts on Numio dark so there is no white flash before the first screen -->
+    <style name="Theme.Files" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/numio_bg</item>
+    </style>
+    <color name="numio_bg">#FF0F0F0E</color>
+    <color name="ic_launcher_background">#FF0F0F0E</color>
+</resources>
