@@ -82,6 +82,7 @@ fun FilesApp(
         val open: (String) -> Unit = { p ->
             if (com.rr.numio.files.data.extOf(p) == "zip") vm.openZip(p) else onOpen(p)
         }
+        var confirmEmptyFolders by remember { mutableStateOf(false) }
         var makingZip by remember { mutableStateOf<String?>(null) }
 
         val overlay = vm.overlay
@@ -90,6 +91,7 @@ fun FilesApp(
 
         BackHandler(enabled = vm.selected.isNotEmpty() || overlay != null || vm.tab != Tab.HOME || vm.pending != null) {
             when {
+                overlay == Overlay.Cleanup -> vm.closeOverlay()
                 vm.selected.isNotEmpty() -> vm.clearSelection()
                 inZip && vm.zipUp() -> Unit
                 overlay != null -> vm.closeOverlay()
@@ -105,6 +107,7 @@ fun FilesApp(
             Box(Modifier.weight(1f)) {
                 when {
                     overlay is Overlay.Cat && overlay.category == Category.TRASH -> TrashScreen(vm) { confirmEmpty = true }
+                    overlay == Overlay.Cleanup -> CleanupScreen(vm, open)
                     overlay is Overlay.Zip -> ZipScreen(vm, overlay) { entry -> vm.openZipEntry(entry, onOpen) }
                     overlay is Overlay.Cat -> CategoryScreen(vm, overlay.category, open)
                     overlay == Overlay.Search -> SearchScreen(vm, open)
@@ -115,6 +118,14 @@ fun FilesApp(
                 }
             }
             when {
+                overlay == Overlay.Cleanup -> if (vm.selected.isNotEmpty() && !vm.cleanScanning) {
+                    val n = vm.selected.size
+                    val empty = vm.cleanTab == com.rr.numio.files.CleanTab.EMPTY
+                    BigBar(
+                        if (empty) (if (n == 1) "Delete 1 empty folder" else "Delete $n empty folders")
+                        else "Move $n to Trash",
+                    ) { if (empty) confirmEmptyFolders = true else vm.trashPicked() }
+                }
                 inZip -> ActionBar(
                     listOf(
                         Action(if (vm.selected.isEmpty()) "Extract all here" else "Extract here", FIcons.Download) { vm.extractHere() },
@@ -183,6 +194,18 @@ fun FilesApp(
             ) {
                 confirmDelete = false
                 vm.deleteSelected()
+            }
+        }
+        if (confirmEmptyFolders) {
+            val n = vm.selected.size
+            Confirm(
+                title = if (n == 1) "Delete 1 empty folder?" else "Delete $n empty folders?",
+                body = "Only empty folders are deleted. If anything has appeared inside one since the scan, that folder is kept.",
+                yes = "Delete",
+                onDismiss = { confirmEmptyFolders = false },
+            ) {
+                confirmEmptyFolders = false
+                vm.deleteEmptyFolders()
             }
         }
         if (confirmForever) {
@@ -279,6 +302,16 @@ private fun ActionBar(actions: List<Action>) {
             }
         }
     }
+}
+
+/** One big amber button at the bottom. */
+@Composable
+private fun BigBar(label: String, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(containerColor = Numio.Amber, contentColor = Numio.OnAmber),
+        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp, top = 6.dp).fillMaxWidth().height(52.dp),
+    ) { Text(label, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Numio.OnAmber) }
 }
 
 @Composable

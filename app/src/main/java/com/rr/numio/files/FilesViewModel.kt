@@ -22,6 +22,8 @@ import com.rr.numio.files.data.Storage
 import com.rr.numio.files.data.Trash
 import com.rr.numio.files.data.TrashEntry
 import com.rr.numio.files.data.ZipNode
+import com.rr.numio.files.data.EmptyFolder
+import com.rr.numio.files.data.Cleanup
 import com.rr.numio.files.data.Zips
 import com.rr.numio.files.data.uniqueName
 import android.net.Uri
@@ -42,7 +44,10 @@ sealed interface Overlay {
     data object Search : Overlay
     /** Looking inside a ZIP; [inner] is the folder in it ("" = top). */
     data class Zip(val path: String, val inner: String, val outside: Boolean) : Overlay
+    data object Cleanup : Overlay
 }
+
+enum class CleanTab(val label: String) { EMPTY("Empty folders"), LARGE("Large files"), APKS("APK files") }
 
 /**
  * Files picked for Copy or Move, waiting for "Paste here".
@@ -280,6 +285,76 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
                 FileOps.reindex(getApplication(), listOf(dest.absolutePath))
                 "Made ${dest.name}"
             } else "Couldn't make the ZIP"
+        }
+    }
+
+    // Clean up
+
+    var cleanTab by mutableStateOf(CleanTab.EMPTY); private set
+    var cleanScanning by mutableStateOf(false); private set
+    var emptyFolders by mutableStateOf<List<EmptyFolder>>(emptyList()); private set
+    var largeFiles by mutableStateOf<List<FileItem>>(emptyList()); private set
+
+    fun openCleanup() {
+        selected.clear()
+        overlay = Overlay.Cleanup
+        scanCleanup()
+    }
+
+    fun pickCleanTab(t: CleanTab) {
+        cleanTab = t
+        selected.clear()
+        // Empty folders are safe to pick all at once; files are picked one by one
+        if (t == CleanTab.EMPTY) selected.addAll(emptyFolders.map { it.path })
+    }
+
+    private fun scanCleanup() {
+        cleanScanning = true
+        viewModelScope.launch {
+            val (empty, large) = withContext(Dispatchers.IO) {
+                Cleanup.emptyFolders(Storage.root) to Cleanup.largeFiles(Storage.root)
+            }
+            emptyFolders = empty
+            largeFiles = large
+            cleanScanning = false
+            if (overlay == Overlay.Cleanup) pickCleanTab(cleanTab)
+        }
+    }
+
+    fun apkFiles(): List<FileItem> = home?.categoryFiles?.get(Category.APKS).orEmpty().sortedByDescending { it.size }
+
+    /** Deletes the picked empty folders. Anything that isn't empty any more is kept. */
+    fun deleteEmptyFolders() {
+        val paths = selected.toList()
+        selected.clear()
+        run("Deleting empty folders…") {
+            var kept = 0
+            for (p in paths) if (!Cleanup.deleteEmptyTree(File(p))) kept++
+            FileOps.reindex(getApplication(), paths)
+            val done = paths.size - kept
+            val main = if (done == 1) "Deleted 1 empty folder" else "Deleted $done empty folders"
+            if (kept == 0) main else "$main. $kept had something inside, so they were kept."
+        }
+        afterClean()
+    }
+
+    /** Large files and APKs go to Trash, so they can be restored. */
+    fun trashPicked() {
+        val paths = selected.toList()
+        selected.clear()
+        run("Moving to Trash…") {
+            val failed = trash.moveIn(paths.map(::File))
+            FileOps.reindex(getApplication(), paths)
+            if (failed == 0) "${items(paths.size)} moved to Trash" else "$failed couldn't be moved to Trash"
+        }
+        afterClean()
+    }
+
+    private fun afterClean() {
+        viewModelScope.launch {
+            // Wait for the delete job, then look again
+            while (busy) delay(100)
+            if (overlay == Overlay.Cleanup) scanCleanup()
         }
     }
 

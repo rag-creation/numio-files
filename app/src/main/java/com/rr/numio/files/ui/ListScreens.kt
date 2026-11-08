@@ -359,3 +359,94 @@ fun ZipScreen(vm: FilesViewModel, zip: com.rr.numio.files.Overlay.Zip, onOpenEnt
         }
     }
 }
+
+@Composable
+fun CleanupScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit) {
+    val rootPath = vm.root.absolutePath + "/"
+    val tab = vm.cleanTab
+    val rows: List<Pair<FileItem, String>> = when (tab) {
+        com.rr.numio.files.CleanTab.EMPTY -> vm.emptyFolders.map { e ->
+            val name = e.path.substringAfterLast('/')
+            val where = e.path.removePrefix(rootPath).substringBeforeLast('/', "").ifEmpty { "Internal" }
+            FileItem(e.path, name, true, 0, 0, 0) to
+                (where + if (e.nested > 0) " · with ${e.nested} empty folder${if (e.nested == 1) "" else "s"} inside" else "")
+        }
+        com.rr.numio.files.CleanTab.LARGE -> vm.largeFiles.map { it to "${formatSize(it.size)} · ${it.path.removePrefix(rootPath).substringBeforeLast('/', "Internal")}" }
+        com.rr.numio.files.CleanTab.APKS -> vm.apkFiles().map { it to metaFor(it) }
+    }
+    Column {
+        TitleHeader("Clean up", onBack = vm::closeOverlay)
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+        ) {
+            com.rr.numio.files.CleanTab.entries.forEach { t ->
+                val on = t == tab
+                Text(
+                    t.label,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (on) Numio.OnAmber else Numio.Text,
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (on) Numio.Amber else Numio.Surface)
+                        .clickable { vm.pickCleanTab(t) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                )
+            }
+        }
+        LazyColumn(Modifier.fillMaxSize()) {
+            item {
+                val note = when (tab) {
+                    com.rr.numio.files.CleanTab.EMPTY ->
+                        "Only folders with nothing at all inside, hidden files included. Folders Files can't look into, Android/ and standard folders like DCIM are never touched."
+                    com.rr.numio.files.CleanTab.LARGE -> "Files over 100 MB. Picked files go to Trash, so you can restore them."
+                    com.rr.numio.files.CleanTab.APKS -> "Install files you may not need any more. Picked files go to Trash."
+                }
+                Text(note, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 8.dp))
+                if (rows.isNotEmpty()) {
+                    val all = rows.all { it.first.path in vm.selected }
+                    Text(
+                        if (all) "Unselect all" else "Select all ${rows.size}",
+                        color = Numio.AmberText,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        modifier = Modifier
+                            .padding(start = 12.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { if (all) vm.clearSelection() else vm.selectAll(rows.map { it.first.path }) }
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                    )
+                }
+            }
+            if (vm.cleanScanning) {
+                item { EmptyNote("Looking through your folders…", "This can take a moment on a full phone.") }
+            } else if (rows.isEmpty()) {
+                item {
+                    EmptyNote(
+                        when (tab) {
+                            com.rr.numio.files.CleanTab.EMPTY -> "No empty folders"
+                            com.rr.numio.files.CleanTab.LARGE -> "No files over 100 MB"
+                            com.rr.numio.files.CleanTab.APKS -> "No APK files"
+                        },
+                        "Nothing to clean here.",
+                    )
+                }
+            }
+            if (!vm.cleanScanning) {
+                items(rows, key = { it.first.path }) { (f, meta) ->
+                    FileRow(
+                        item = f,
+                        meta = meta,
+                        selecting = true,
+                        selected = f.path in vm.selected,
+                        starred = false,
+                        onClick = { vm.toggle(f.path) },
+                        onLongClick = { if (!f.isDir) onOpenFile(f.path) },
+                    )
+                }
+            }
+            item { Spacer(Modifier.height(24.dp)) }
+        }
+    }
+}

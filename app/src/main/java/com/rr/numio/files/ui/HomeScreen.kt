@@ -64,7 +64,7 @@ fun HomeScreen(vm: FilesViewModel, onOpen: (String) -> Unit) {
                     modifier = Modifier.padding(start = 20.dp, top = 4.dp, bottom = 18.dp),
                 )
             }
-            item { StorageCard(stats, onCleanUp = { vm.openCategory(Category.TRASH) }) }
+            item { StorageCard(stats, onCleanUp = vm::openCleanup) }
             item { CategoryGrid(stats, vm::openCategory) }
             item {
                 Text(
