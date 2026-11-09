@@ -51,6 +51,8 @@ sealed interface Overlay {
     data class Text(val path: String, val outside: Boolean) : Overlay
     /** An Apple Pages / Numbers / Keynote file, shown from the preview inside it. */
     data class Iwork(val path: String, val outside: Boolean) : Overlay
+    /** A Word (.docx) or Excel (.xlsx) file in the built-in reader. */
+    data class Office(val path: String, val outside: Boolean) : Overlay
 }
 
 enum class CleanTab(val label: String) { EMPTY("Empty folders"), LARGE("Large files"), APKS("APK files") }
@@ -334,6 +336,11 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun openOffice(path: String, outside: Boolean = false) {
+        selected.clear()
+        overlay = Overlay.Office(path, outside)
+    }
+
     // Text viewer
 
     fun openText(path: String, outside: Boolean = false) {
@@ -343,7 +350,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Opens a ZIP or text file another app handed over ("Open with Files"). */
     fun openFrom(uri: Uri, name: String) {
-        if (com.rr.numio.files.data.PagesFile.isIwork(name)) {
+        if (com.rr.numio.files.data.PagesFile.isIwork(name) || com.rr.numio.files.data.OfficeFiles.isOffice(name)) {
             viewModelScope.launch {
                 val ctx = getApplication<Application>()
                 val copy = withContext(Dispatchers.IO) {
@@ -354,7 +361,9 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
                         out.takeIf { it.length() > 0 }
                     }.getOrNull()
                 }
-                if (copy == null) message = "Couldn't open that file" else openIwork(copy.absolutePath, outside = true)
+                if (copy == null) message = "Couldn't open that file"
+                else if (com.rr.numio.files.data.OfficeFiles.isOffice(name)) openOffice(copy.absolutePath, outside = true)
+                else openIwork(copy.absolutePath, outside = true)
             }
             return
         }

@@ -85,6 +85,7 @@ fun FilesApp(
             when {
                 com.rr.numio.files.data.extOf(p) == "zip" -> vm.openZip(p)
                 com.rr.numio.files.data.PagesFile.isIwork(p) -> vm.openIwork(p)
+                com.rr.numio.files.data.OfficeFiles.isOffice(p) -> vm.openOffice(p)
                 com.rr.numio.files.data.TextFiles.isText(p.substringAfterLast('/')) -> vm.openText(p)
                 else -> onOpen(p)
             }
@@ -117,6 +118,7 @@ fun FilesApp(
                     overlay == Overlay.Cleanup -> CleanupScreen(vm, open)
                     overlay is Overlay.Text -> TextViewerScreen(vm, overlay)
                     overlay is Overlay.Iwork -> IworkScreen(vm, overlay, onOpen)
+                    overlay is Overlay.Office -> OfficeScreen(vm, overlay)
                     overlay is Overlay.Zip -> ZipScreen(vm, overlay) { entry -> vm.openZipEntry(entry, onOpen) }
                     overlay is Overlay.Cat -> CategoryScreen(vm, overlay.category, open)
                     overlay == Overlay.Search -> SearchScreen(vm, open)
