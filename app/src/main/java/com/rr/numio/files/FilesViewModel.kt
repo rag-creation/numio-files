@@ -115,7 +115,14 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         val first = ok && !hasAccess
         hasAccess = ok
         if (ok) {
-            if (first) refreshAll() else reloadDir()
+            if (first) refreshAll() else {
+                // An SD card or USB drive may have been plugged in or out meanwhile
+                volumes = runCatching { Storage.volumes(getApplication()) }.getOrDefault(volumes)
+                if (volumeOf(dir) == null && dir.absolutePath != Storage.root.absolutePath && !dir.exists()) {
+                    dir = Storage.root // the drive this folder was on is gone
+                }
+                reloadDir()
+            }
         }
     }
 
