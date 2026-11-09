@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.media.MediaMetadataRetriever
 import android.media.ThumbnailUtils
+import android.graphics.pdf.PdfRenderer
+import android.os.ParcelFileDescriptor
 import android.os.Build
 import android.provider.MediaStore
 import android.util.LruCache
@@ -24,8 +26,20 @@ object Thumbs {
     /** Files that have no preview, so we don't try again while scrolling. */
     private val none = HashSet<String>()
 
+    /** True if the file starts like a PDF ("%PDF"): PDFs, and Illustrator .ai files saved PDF-compatible. */
+    fun isPdfInside(f: File): Boolean = try {
+        f.inputStream().use { s ->
+            val head = ByteArray(1024)
+            val n = s.read(head)
+            n > 4 && String(head, 0, n, Charsets.ISO_8859_1).contains("%PDF-")
+        }
+    } catch (e: Exception) {
+        false
+    }
+
     fun hasPreview(name: String): Boolean = when (categoryOf(name)) {
         Category.IMAGES, Category.VIDEOS, Category.AUDIO -> true
+        Category.DOCS -> extOf(name) == "pdf" || extOf(name) == "ai"
         Category.APKS -> extOf(name) == "apk"
         else -> false
     }
@@ -46,7 +60,7 @@ object Thumbs {
                 Category.VIDEOS -> video(f)
                 Category.AUDIO -> albumArt(f)
                 Category.APKS -> apkIcon(context, f)
-                else -> null
+                else -> if (extOf(f.name) == "pdf" || extOf(f.name) == "ai") pdfPage(f) else null
             }
         } catch (e: Throwable) {
             null
@@ -86,6 +100,25 @@ object Thumbs {
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
         } finally {
             r.release()
+        }
+    }
+
+    /** First page of a PDF (or PDF-compatible .ai), drawn by Android's own PDF renderer. */
+    private fun pdfPage(f: File): Bitmap? {
+        if (!isPdfInside(f)) return null
+        ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY).use { fd ->
+            PdfRenderer(fd).use { r ->
+                if (r.pageCount == 0) return null
+                r.openPage(0).use { page ->
+                    val scale = PX.toFloat() / maxOf(page.width, page.height)
+                    val w = (page.width * scale).toInt().coerceAtLeast(1)
+                    val h = (page.height * scale).toInt().coerceAtLeast(1)
+                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    bmp.eraseColor(android.graphics.Color.WHITE) // pages are drawn on white paper
+                    page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    return bmp
+                }
+            }
         }
     }
 

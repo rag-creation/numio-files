@@ -113,8 +113,11 @@ class MainActivity : ComponentActivity() {
 
     private fun uriFor(f: File): Uri = FileProvider.getUriForFile(this, "$packageName.files", f)
 
-    private fun mimeOf(f: File): String =
-        MimeTypeMap.getSingleton().getMimeTypeFromExtension(extOf(f.name)) ?: "*/*"
+    private fun mimeOf(f: File): String {
+        // Illustrator .ai files saved "PDF compatible" are PDFs inside: open them as PDF
+        if (extOf(f.name) == "ai" && com.rr.numio.files.data.Thumbs.isPdfInside(f)) return "application/pdf"
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(extOf(f.name)) ?: "*/*"
+    }
 
     /**
      * Opens a file the normal Android way: straight into the default app for its
@@ -133,7 +136,10 @@ class MainActivity : ComponentActivity() {
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
             startActivity(if (chooser) Intent.createChooser(view, null) else view)
         } catch (e: Exception) {
-            Toast.makeText(this, "No app on this phone can open this file.", Toast.LENGTH_LONG).show()
+            val note = if (extOf(f.name) == "ai") {
+                "This Illustrator file has no PDF copy inside, so phones can't show it. Open it in Illustrator or Inkscape on a computer."
+            } else "No app on this phone can open this file."
+            Toast.makeText(this, note, Toast.LENGTH_LONG).show()
         }
     }
 
