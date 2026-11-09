@@ -21,7 +21,28 @@ data class HomeStats(
     val system: Long get() = (used - media - otherFiles).coerceAtLeast(0)
 }
 
+/** A place files live: internal storage, an SD card or a USB drive. */
+data class Volume(val label: String, val dir: File, val total: Long, val free: Long, val internal: Boolean)
+
 object Storage {
+    /** Internal storage first, then SD cards and USB drives that are plugged in. */
+    fun volumes(context: Context): List<Volume> {
+        val sm = context.getSystemService(android.os.storage.StorageManager::class.java) ?: return emptyList()
+        return sm.storageVolumes.mapNotNull { v ->
+            if (v.state != Environment.MEDIA_MOUNTED && v.state != Environment.MEDIA_MOUNTED_READ_ONLY) return@mapNotNull null
+            val dir = if (android.os.Build.VERSION.SDK_INT >= 30) v.directory else runCatching {
+                v.javaClass.getMethod("getPathFile").invoke(v) as File
+            }.getOrNull()
+            dir ?: return@mapNotNull null
+            val stat = runCatching { StatFs(dir.path) }.getOrNull() ?: return@mapNotNull null
+            val label = when {
+                v.isPrimary -> "Internal storage"
+                else -> v.getDescription(context)?.takeIf { it.isNotBlank() } ?: if (v.isRemovable) "SD card" else "Storage"
+            }
+            Volume(label, dir, stat.totalBytes, stat.availableBytes, v.isPrimary)
+        }.sortedByDescending { it.internal }
+    }
+
     val root: File get() = Environment.getExternalStorageDirectory()
     val downloads: File get() = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
 

@@ -54,8 +54,37 @@ private fun Files(
     onOpenFile: (String) -> Unit,
     header: @Composable () -> Unit = {},
     empty: @Composable () -> Unit = {},
+    grid: Boolean = false,
 ) {
     val selecting = vm.selected.isNotEmpty()
+    val open: (FileItem) -> Unit = { f ->
+        when {
+            selecting -> vm.toggle(f.path)
+            f.isDir -> vm.openDir(File(f.path))
+            else -> onOpenFile(f.path)
+        }
+    }
+    if (grid) {
+        androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+            columns = androidx.compose.foundation.lazy.grid.GridCells.Adaptive(108.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, end = 12.dp, bottom = 24.dp),
+        ) {
+            item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { Column { header() } }
+            if (items.isEmpty()) item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { empty() }
+            items(items.size, key = { items[it].path }) { i ->
+                val f = items[i]
+                GridCell(
+                    item = f,
+                    selecting = selecting,
+                    selected = f.path in vm.selected,
+                    onClick = { open(f) },
+                    onLongClick = { vm.toggle(f.path) },
+                )
+            }
+        }
+        return
+    }
     LazyColumn(Modifier.fillMaxSize()) {
         item { header() }
         if (items.isEmpty()) item { empty() }
@@ -77,6 +106,11 @@ private fun Files(
         }
         item { Spacer(Modifier.height(24.dp)) }
     }
+}
+
+@Composable
+private fun GridButton(grid: Boolean, onToggle: () -> Unit) {
+    IconBtn(if (grid) FIcons.ListView else FIcons.GridView, if (grid) "Show as list" else "Show as grid", onClick = onToggle)
 }
 
 @Composable
@@ -124,6 +158,9 @@ private fun StarAction(vm: FilesViewModel) {
         }
         if (pdfInside) LabeledBtn(FIcons.SavePdf, "Save PDF", tint = Numio.AmberText) { vm.saveAsPdf(one) }
     }
+    if (one != null && com.rr.numio.files.data.extOf(one) == "psd") {
+        LabeledBtn(FIcons.SavePdf, "Save PNG", tint = Numio.AmberText) { vm.savePsdPng(one) }
+    }
     LabeledBtn(FIcons.Info, "Details") { vm.showDetails() }
     StarOnly(vm)
 }
@@ -143,15 +180,17 @@ fun BrowseScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit, onNewFolder: 
         if (vm.selected.isNotEmpty()) {
             SelectionHeader(vm.selected.size, vm::clearSelection, { vm.selectAll(vm.dirItems.map { it.path }) }) { StarAction(vm) }
         } else {
-            TitleHeader(if (atRoot) "Internal storage" else vm.dir.name, onBack = if (atRoot) null else ({ vm.up(); Unit })) {
+            TitleHeader(if (atRoot) (vm.volumeOf(vm.dir)?.label ?: "Internal storage") else vm.dir.name, onBack = if (atRoot) null else ({ vm.up(); Unit })) {
                 IconBtn(FIcons.Search, "Search files", onClick = vm::openSearch)
                 IconBtn(FIcons.FolderPlus, "New folder", onClick = onNewFolder)
+                GridButton(vm.isGrid(vm.dir.absolutePath, vm.dirItems)) { vm.toggleGrid(vm.dir.absolutePath, vm.dirItems) }
                 SortButton(vm)
             }
         }
         Files(
             vm, vm.dirItems, onOpenFile,
             header = {
+                if (vm.volumes.size > 1) VolumeChips(vm)
                 Breadcrumbs(vm)
                 val files = vm.dirItems.count { !it.isDir }
                 val size = vm.dirItems.filter { !it.isDir }.sumOf { it.size }
@@ -162,6 +201,7 @@ fun BrowseScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit, onNewFolder: 
                 )
             },
             empty = { EmptyNote("This folder is empty", "Paste or create something here.") },
+            grid = vm.isGrid(vm.dir.absolutePath, vm.dirItems),
         )
     }
 }
@@ -184,7 +224,7 @@ private fun Breadcrumbs(vm: FilesViewModel) {
     ) {
         parts.forEachIndexed { i, f ->
             val last = i == parts.size - 1
-            val label = if (f.absolutePath == rootPath) "Internal" else f.name
+            val label = if (f.absolutePath == rootPath) (vm.volumeOf(f)?.label?.let { if (it == "Internal storage") "Internal" else it } ?: "Internal") else f.name
             Text(
                 label,
                 fontSize = 13.sp,
@@ -208,7 +248,10 @@ fun CategoryScreen(vm: FilesViewModel, category: Category, onOpenFile: (String) 
         if (vm.selected.isNotEmpty()) {
             SelectionHeader(vm.selected.size, vm::clearSelection, { vm.selectAll(items.map { it.path }) }) { StarAction(vm) }
         } else {
-            TitleHeader(category.label, onBack = vm::closeOverlay) { SortButton(vm) }
+            TitleHeader(category.label, onBack = vm::closeOverlay) {
+                GridButton(vm.isGrid("cat:" + category.name, items)) { vm.toggleGrid("cat:" + category.name, items) }
+                SortButton(vm)
+            }
         }
         Files(
             vm, items, onOpenFile,
@@ -220,6 +263,7 @@ fun CategoryScreen(vm: FilesViewModel, category: Category, onOpenFile: (String) 
                 )
             },
             empty = { EmptyNote("No ${category.label.lowercase()} yet", "They'll show up here as soon as there are some.") },
+            grid = vm.isGrid("cat:" + category.name, items),
         )
     }
 }
@@ -387,6 +431,12 @@ fun CleanupScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit) {
             FileItem(e.path, name, true, 0, 0, 0) to
                 (where + if (e.nested > 0) " · with ${e.nested} empty folder${if (e.nested == 1) "" else "s"} inside" else "")
         }
+        com.rr.numio.files.CleanTab.DUPES -> vm.duplicates.flatMap { group ->
+            group.mapIndexed { i, f ->
+                val where = f.path.removePrefix(rootPath).substringBeforeLast('/', "Internal")
+                f to (if (i == 0) "Oldest, kept · " else "Copy ${i} of ${group.size - 1} · ") + "${formatSize(f.size)} · $where"
+            }
+        }
         com.rr.numio.files.CleanTab.LARGE -> vm.largeFiles.map { it to "${formatSize(it.size)} · ${it.path.removePrefix(rootPath).substringBeforeLast('/', "Internal")}" }
         com.rr.numio.files.CleanTab.APKS -> vm.apkFiles().map { it to metaFor(it) }
     }
@@ -416,6 +466,10 @@ fun CleanupScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit) {
                 val note = when (tab) {
                     com.rr.numio.files.CleanTab.EMPTY ->
                         "Only folders with nothing at all inside, hidden files included. Folders Files can't look into, Android/ and standard folders like DCIM are never touched."
+                    com.rr.numio.files.CleanTab.DUPES -> {
+                        val waste = vm.duplicates.sumOf { it[0].size * (it.size - 1) }
+                        "Files with exactly the same content (checked byte by byte with a fingerprint, not just the name). The oldest of each stays; copies are picked for you and go to Trash. ${formatSize(waste)} to free."
+                    }
                     com.rr.numio.files.CleanTab.LARGE -> "Files over 100 MB. Picked files go to Trash, so you can restore them."
                     com.rr.numio.files.CleanTab.APKS -> "Install files you may not need any more. Picked files go to Trash."
                 }
@@ -442,6 +496,7 @@ fun CleanupScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit) {
                     EmptyNote(
                         when (tab) {
                             com.rr.numio.files.CleanTab.EMPTY -> "No empty folders"
+                            com.rr.numio.files.CleanTab.DUPES -> "No duplicates"
                             com.rr.numio.files.CleanTab.LARGE -> "No files over 100 MB"
                             com.rr.numio.files.CleanTab.APKS -> "No APK files"
                         },
@@ -502,6 +557,31 @@ private fun Chips(items: List<String>, onPick: (String) -> Unit) {
                     .background(Numio.Surface)
                     .clickable { onPick(t) }
                     .padding(horizontal = 14.dp, vertical = 9.dp),
+            )
+        }
+    }
+}
+
+/** Internal · SD card · USB: jump between storages. */
+@Composable
+private fun VolumeChips(vm: FilesViewModel) {
+    val current = vm.volumeOf(vm.dir)
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp),
+    ) {
+        vm.volumes.forEach { v ->
+            val on = v == current
+            Text(
+                if (v.internal) "Internal" else v.label,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (on) Numio.OnAmber else Numio.Text,
+                modifier = Modifier
+                    .padding(end = 8.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(if (on) Numio.Amber else Numio.Surface)
+                    .clickable { vm.openDir(v.dir) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
             )
         }
     }

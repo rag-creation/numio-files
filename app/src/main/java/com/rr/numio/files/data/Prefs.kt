@@ -27,4 +27,9 @@ class Prefs(context: Context) {
     var searchHistory: List<String>
         get() = p.getString("history", "").orEmpty().split('\n').filter { it.isNotBlank() }
         set(v) = p.edit().putString("history", v.joinToString("\n")).apply()
+
+    /** Folders where the person chose grid ("g:path") or list ("l:path"). */
+    var viewChoices: Set<String>
+        get() = p.getStringSet("views", emptySet())?.toSet() ?: emptySet()
+        set(v) = p.edit().putStringSet("views", v).apply()
 }

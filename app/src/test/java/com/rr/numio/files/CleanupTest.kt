@@ -43,4 +43,21 @@ class CleanupTest {
         assertFalse(Cleanup.deleteEmptyTree(File(root, "Photos/Old")))
         assertTrue(File(root, "Photos/Old/new.txt").exists())
     }
+
+    @Test fun findsRealDuplicatesOnly() {
+        val root = tmp.newFolder("dupes")
+        val big = ByteArray(80 * 1024) { (it % 251).toByte() }
+        File(root, "a").mkdirs()
+        File(root, "a/video.mp4").writeBytes(big)
+        File(root, "b").mkdirs()
+        File(root, "b/video (1).mp4").writeBytes(big)
+        // Same size, different content: not a duplicate
+        File(root, "c.bin").writeBytes(big.copyOf().also { it[100] = 7 })
+        // Too small to bother
+        File(root, "s1.txt").writeText("hi")
+        File(root, "s2.txt").writeText("hi")
+        val groups = Cleanup.duplicates(root)
+        assertEquals(1, groups.size)
+        assertEquals(setOf("video.mp4", "video (1).mp4"), groups[0].map { it.name }.toSet())
+    }
 }

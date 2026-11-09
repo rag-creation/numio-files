@@ -72,6 +72,9 @@ object FIcons {
     val OpenWith = stroke("OpenWith", "M14 4h6v6", "M20 4l-9 9", "M18 14v5a1 1 0 0 1 -1 1H5a1 1 0 0 1 -1 -1V7a1 1 0 0 1 1 -1h5")
     val Info = stroke("Info", "M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0 -18z", "M12 11v6", "M12 7.5h.01", width = 1.8f)
     val SavePdf = stroke("SavePdf", "M6 3h8l4 4v6", "M14 3v4h4", "M6 3v18h6", "M17 15v6M14 18l3 3l3-3")
+    val Sd = stroke("Sd", "M8 3h8l3 3v15H5V6z", "M9 7v3M12 7v3M15 7v3")
+    val GridView = stroke("GridView", "M4 4h7v7H4z", "M13 4h7v7h-7z", "M4 13h7v7H4z", "M13 13h7v7h-7z")
+    val ListView = stroke("ListView", "M4 6h16", "M4 12h16", "M4 18h16")
     val Play = fill("Play", "M8 5v14l11-7z")
     val Paste = stroke("Paste", "M8 4h8v3H8z", "M8 5.5H5v15h14v-15h-3")
 

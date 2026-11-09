@@ -84,6 +84,7 @@ fun FilesApp(
         val open: (String) -> Unit = { p ->
             when {
                 com.rr.numio.files.data.extOf(p) == "zip" -> vm.openZip(p)
+                com.rr.numio.files.data.extOf(p) == "psd" -> vm.openPsd(p, onOpen)
                 com.rr.numio.files.data.PagesFile.isIwork(p) -> vm.openIwork(p)
                 com.rr.numio.files.data.OfficeFiles.isOffice(p) -> vm.openOffice(p)
                 com.rr.numio.files.data.TextFiles.isText(p.substringAfterLast('/')) -> vm.openText(p)

@@ -65,6 +65,9 @@ fun HomeScreen(vm: FilesViewModel, onOpen: (String) -> Unit) {
                 )
             }
             item { StorageCard(stats, onCleanUp = vm::openCleanup) }
+            vm.volumes.filter { !it.internal }.forEach { v ->
+                item(key = v.dir.absolutePath) { VolumeCard(v) { vm.openDir(v.dir) } }
+            }
             item { CategoryGrid(stats, vm::openCategory) }
             item {
                 Text(
@@ -193,5 +196,32 @@ private fun CategoryGrid(stats: HomeStats?, onOpen: (Category) -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** An SD card or USB drive under the storage card. */
+@Composable
+private fun VolumeCard(v: com.rr.numio.files.data.Volume, onOpen: () -> Unit) {
+    Row(
+        Modifier
+            .padding(start = 20.dp, end = 20.dp, top = 10.dp)
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(Numio.Surface)
+            .border(1.dp, Numio.Line, RoundedCornerShape(18.dp))
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Numio.AmberSoft),
+            contentAlignment = Alignment.Center,
+        ) { Icon(FIcons.Sd, null, tint = Numio.AmberText, modifier = Modifier.size(22.dp)) }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(v.label, style = MaterialTheme.typography.titleSmall)
+            Text("${formatSize(v.free)} free of ${formatSize(v.total)}", style = MaterialTheme.typography.bodySmall)
+        }
+        Icon(FIcons.Chevron, null, tint = Numio.TextDim, modifier = Modifier.size(18.dp))
     }
 }

@@ -34,7 +34,7 @@ fun extOf(name: String): String {
     return if (dot <= 0 || dot == name.length - 1) "" else name.substring(dot + 1).lowercase(Locale.ROOT)
 }
 
-private val images = setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "avif", "dng", "raw", "svg")
+private val images = setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "avif", "dng", "raw", "svg", "psd")
 private val videos = setOf("mp4", "mkv", "webm", "3gp", "mov", "avi", "m4v", "ts", "wmv")
 private val audio = setOf("mp3", "m4a", "aac", "ogg", "opus", "flac", "wav", "amr", "wma", "mid", "midi")
 private val docs = setOf(

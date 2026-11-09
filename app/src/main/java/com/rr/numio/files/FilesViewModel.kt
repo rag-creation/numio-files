@@ -55,7 +55,7 @@ sealed interface Overlay {
     data class Office(val path: String, val outside: Boolean) : Overlay
 }
 
-enum class CleanTab(val label: String) { EMPTY("Empty folders"), LARGE("Large files"), APKS("APK files") }
+enum class CleanTab(val label: String) { EMPTY("Empty folders"), DUPES("Duplicates"), LARGE("Large files"), APKS("APK files") }
 
 /**
  * Files picked for Copy or Move, waiting for "Paste here".
@@ -94,7 +94,15 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     var message by mutableStateOf<String?>(null)
     var busy by mutableStateOf(false); private set
 
-    val root: File get() = Storage.root
+    /** Plugged-in storage: internal, SD cards, USB drives. */
+    var volumes by mutableStateOf<List<com.rr.numio.files.data.Volume>>(emptyList()); private set
+
+    /** The top of whichever storage the open folder is on. */
+    val root: File get() = volumeOf(dir)?.dir ?: Storage.root
+
+    fun volumeOf(f: File): com.rr.numio.files.data.Volume? =
+        volumes.filter { f.absolutePath == it.dir.absolutePath || f.absolutePath.startsWith(it.dir.absolutePath + "/") }
+            .maxByOrNull { it.dir.absolutePath.length }
 
     fun checkAccess() {
         val ctx = getApplication<Application>()
@@ -112,6 +120,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refreshAll() {
+        volumes = runCatching { Storage.volumes(getApplication()) }.getOrDefault(emptyList())
         reloadDir()
         viewModelScope.launch {
             val stats = withContext(Dispatchers.IO) {
@@ -140,6 +149,31 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
             }
             starredItems = sortItems(items, sort)
         }
+    }
+
+    // Grid or list
+
+    private var viewChoices by mutableStateOf(prefs.viewChoices)
+
+    /**
+     * Grid if the person chose it for this folder; otherwise grid when the folder
+     * is mostly photos and videos (DCIM, Screenshots, WhatsApp Images…).
+     */
+    fun isGrid(key: String, items: List<FileItem>): Boolean {
+        if ("g:$key" in viewChoices) return true
+        if ("l:$key" in viewChoices) return false
+        if (key == "cat:IMAGES" || key == "cat:VIDEOS") return true
+        val files = items.filter { !it.isDir }
+        if (files.size < 6) return false
+        val media = files.count { com.rr.numio.files.data.categoryOf(it.name).let { c -> c == Category.IMAGES || c == Category.VIDEOS } }
+        return media * 10 >= files.size * 7
+    }
+
+    fun toggleGrid(key: String, items: List<FileItem>) {
+        val nowGrid = isGrid(key, items)
+        val next = viewChoices.filter { it != "g:$key" && it != "l:$key" }.toSet() + (if (nowGrid) "l:$key" else "g:$key")
+        viewChoices = next
+        prefs.viewChoices = next
     }
 
     // Navigation
@@ -443,12 +477,59 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Photoshop files: the flat picture inside, as a PNG another app can show. */
+    fun openPsd(path: String, open: (String) -> Unit) {
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            busy = true
+            val png = withContext(Dispatchers.IO) {
+                runCatching {
+                    val src = File(path)
+                    val dir = File(ctx.cacheDir, "psd").apply { deleteRecursively(); mkdirs() }
+                    val out = File(dir, src.name.substringBeforeLast('.') + ".png")
+                    val bmp = com.rr.numio.files.data.Thumbs.psd(src, 2048)
+                    out.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    out
+                }
+            }
+            busy = false
+            png.onSuccess { open(it.absolutePath) }.onFailure {
+                message = (it as? com.rr.numio.files.data.Psd.Unsupported)?.message
+                    ?: "This PSD has no flat picture inside. Save it in Photoshop with \"Maximize compatibility\" on."
+            }
+        }
+    }
+
+    /** Saves the flat picture of a PSD as a PNG next to it. */
+    fun savePsdPng(path: String) {
+        selected.clear()
+        val src = File(path)
+        val parent = src.parentFile ?: return
+        run("Saving PNG…") {
+            val dest = File(parent, uniqueName(src.name.substringBeforeLast('.') + ".png") { File(parent, it).exists() })
+            try {
+                val bmp = com.rr.numio.files.data.Thumbs.psd(src, 4096)
+                dest.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                FileOps.reindex(getApplication(), listOf(dest.absolutePath))
+                "Saved ${dest.name}"
+            } catch (e: com.rr.numio.files.data.Psd.Unsupported) {
+                dest.delete()
+                e.message
+            } catch (e: Throwable) {
+                dest.delete()
+                "Couldn't read the picture in this PSD"
+            }
+        }
+    }
+
     // Clean up
 
     var cleanTab by mutableStateOf(CleanTab.EMPTY); private set
     var cleanScanning by mutableStateOf(false); private set
     var emptyFolders by mutableStateOf<List<EmptyFolder>>(emptyList()); private set
     var largeFiles by mutableStateOf<List<FileItem>>(emptyList()); private set
+    /** Same-content groups, oldest first in each. */
+    var duplicates by mutableStateOf<List<List<FileItem>>>(emptyList()); private set
 
     fun openCleanup() {
         selected.clear()
@@ -460,8 +541,9 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     fun pickCleanTab(t: CleanTab) {
         cleanTab = t
         selected.clear()
-        // Empty folders are safe to pick all at once; files are picked one by one
+        // Empty folders are safe to pick all at once; for duplicates, every copy but the oldest
         if (t == CleanTab.EMPTY) selected.addAll(emptyFolders.map { it.path })
+        if (t == CleanTab.DUPES) selected.addAll(duplicates.flatMap { it.drop(1) }.map { it.path })
     }
 
     private fun scanCleanup() {
@@ -472,6 +554,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
             }
             emptyFolders = empty
             largeFiles = large
+            duplicates = withContext(Dispatchers.IO) { runCatching { Cleanup.duplicates(Storage.root) }.getOrDefault(emptyList()) }
             cleanScanning = false
             if (overlay == Overlay.Cleanup) pickCleanTab(cleanTab)
         }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -273,5 +274,77 @@ fun EmptyNote(title: String, body: String, modifier: Modifier = Modifier) {
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(body, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+/** One square in grid view: a big preview (or folder / file type), name underneath. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun GridCell(
+    item: FileItem,
+    selecting: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    val thumb by produceState<Bitmap?>(Thumbs.cached(item.path, item.modified), item.path, item.modified) {
+        if (!item.isDir && value == null && Thumbs.hasPreview(item.name)) {
+            value = withContext(Dispatchers.IO) { Thumbs.load(context, item.path, item.modified) }
+        }
+    }
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        Modifier
+            .padding(4.dp)
+            .clip(shape)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(shape)
+                .background(if (item.isDir) Numio.AmberSoft else Numio.SurfaceHigh)
+                .then(if (selected) Modifier.border(3.dp, Numio.Amber, shape) else Modifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            val bmp = thumb
+            when {
+                item.isDir -> Icon(FIcons.Folder, null, tint = Numio.AmberText, modifier = Modifier.size(34.dp))
+                bmp != null -> {
+                    val isApk = categoryOf(item.name) == Category.APKS
+                    Image(
+                        bmp.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = if (isApk) ContentScale.Fit else ContentScale.Crop,
+                        modifier = if (isApk) Modifier.fillMaxSize().padding(18.dp) else Modifier.fillMaxSize(),
+                    )
+                    if (categoryOf(item.name) == Category.VIDEOS) {
+                        Box(
+                            Modifier.size(26.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.55f)),
+                            contentAlignment = Alignment.Center,
+                        ) { Icon(FIcons.Play, "Video", tint = Color.White, modifier = Modifier.size(13.dp)) }
+                    }
+                }
+                else -> Text(
+                    item.ext.uppercase(Locale.ROOT).take(4).ifEmpty { "FILE" },
+                    color = Numio.TextDim,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            if (selecting) {
+                Box(Modifier.fillMaxSize().padding(6.dp), contentAlignment = Alignment.TopEnd) { CheckCircle(selected) }
+            }
+        }
+        Text(
+            item.name,
+            fontSize = 12.sp,
+            color = Numio.Text,
+            maxLines = 1,
+            overflow = TextOverflow.MiddleEllipsis,
+            modifier = Modifier.padding(start = 4.dp, end = 4.dp, top = 5.dp, bottom = 2.dp),
+        )
     }
 }
