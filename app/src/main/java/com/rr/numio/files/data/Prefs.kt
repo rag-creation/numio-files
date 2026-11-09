@@ -22,4 +22,9 @@ class Prefs(context: Context) {
     var starred: Set<String>
         get() = p.getStringSet("starred", emptySet())?.toSet() ?: emptySet()
         set(v) = p.edit().putStringSet("starred", v).apply()
+
+    /** Recent searches, newest first (kept on the phone only). */
+    var searchHistory: List<String>
+        get() = p.getString("history", "").orEmpty().split('\n').filter { it.isNotBlank() }
+        set(v) = p.edit().putString("history", v.joinToString("\n")).apply()
 }

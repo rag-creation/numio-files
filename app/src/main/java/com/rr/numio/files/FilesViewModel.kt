@@ -147,6 +147,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     fun openTab(t: Tab) {
         selected.clear()
         overlay = null
+        overlayStack.clear()
         tab = t
         if (t == Tab.STARRED) reloadStarred()
     }
@@ -154,6 +155,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     fun openDir(f: File) {
         selected.clear()
         overlay = null
+        overlayStack.clear()
         tab = Tab.BROWSE
         dir = f
         dirItems = emptyList()
@@ -172,10 +174,14 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         when (c) {
             Category.DOWNLOADS -> openDir(Storage.downloads)
             Category.TRASH -> {
+                overlayStack.clear()
                 overlay = Overlay.Cat(c)
                 viewModelScope.launch { trashItems = withContext(Dispatchers.IO) { trash.entries() } }
             }
-            else -> overlay = Overlay.Cat(c)
+            else -> {
+                overlayStack.clear()
+                overlay = Overlay.Cat(c)
+            }
         }
     }
 
@@ -194,7 +200,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         zipNodes = emptyList()
         zipItems = emptyList()
         zipError = null
-        overlay = Overlay.Zip(path, "", outside)
+        showViewer(Overlay.Zip(path, "", outside))
         viewModelScope.launch {
             val nodes = withContext(Dispatchers.IO) { runCatching { Zips.entries(File(path)) }.getOrNull() }
             if (nodes == null) zipError = "This ZIP can't be opened. It may be damaged or password-protected."
@@ -281,6 +287,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         pending = Pending(chosen, move = false, zip = z.path, zipInner = z.inner)
         selected.clear()
         overlay = null
+        overlayStack.clear()
         tab = Tab.BROWSE
         reloadDir()
     }
@@ -308,7 +315,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     fun openIwork(path: String, outside: Boolean = false) {
         selected.clear()
         iwork = null
-        overlay = Overlay.Iwork(path, outside)
+        showViewer(Overlay.Iwork(path, outside))
         viewModelScope.launch {
             val ctx = getApplication<Application>()
             iwork = withContext(Dispatchers.IO) {
@@ -338,14 +345,14 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openOffice(path: String, outside: Boolean = false) {
         selected.clear()
-        overlay = Overlay.Office(path, outside)
+        showViewer(Overlay.Office(path, outside))
     }
 
     // Text viewer
 
     fun openText(path: String, outside: Boolean = false) {
         selected.clear()
-        overlay = Overlay.Text(path, outside)
+        showViewer(Overlay.Text(path, outside))
     }
 
     /** Opens a ZIP or text file another app handed over ("Open with Files"). */
@@ -445,6 +452,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openCleanup() {
         selected.clear()
+        overlayStack.clear()
         overlay = Overlay.Cleanup
         scanCleanup()
     }
@@ -531,16 +539,45 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openSearch() {
         selected.clear()
+        overlayStack.clear()
         overlay = Overlay.Search
+    }
+
+    /** Screens a viewer was opened from, so Back returns there (Search › file › Back = Search). */
+    private val overlayStack = ArrayList<Overlay>()
+
+    private fun showViewer(o: Overlay) {
+        overlay?.let { overlayStack.add(it) }
+        overlay = o
     }
 
     fun closeOverlay() {
         selected.clear()
+        if (overlayStack.isNotEmpty()) {
+            overlay = overlayStack.removeAt(overlayStack.size - 1)
+            return
+        }
         overlay = null
+        overlayStack.clear()
         searchJob?.cancel()
         query = ""
         results = emptyList()
         searching = false
+    }
+
+    var history by mutableStateOf(prefs.searchHistory); private set
+
+    /** Remembers the search when a result is opened or the keyboard's Search key is pressed. */
+    fun commitSearch() {
+        val q = query.trim()
+        if (q.length < 2) return
+        history = (listOf(q) + history.filter { !it.equals(q, ignoreCase = true) }).take(8)
+        prefs.searchHistory = history
+    }
+
+    fun clearHistory() {
+        history = emptyList()
+        prefs.searchHistory = emptyList()
     }
 
     fun search(q: String) {
@@ -554,7 +591,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         searchJob = viewModelScope.launch {
             delay(250) // wait for the typing to pause
             searching = true
-            val found = withContext(Dispatchers.IO) { Storage.search(q, showHidden) }
+            val found = withContext(Dispatchers.IO) { Storage.search(getApplication(), q, showHidden) }
             results = sortItems(found, sort)
             searching = false
         }
@@ -580,6 +617,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         pending = Pending(selected.toList(), move)
         selected.clear()
         overlay = null
+        overlayStack.clear()
         if (tab != Tab.BROWSE) {
             tab = Tab.BROWSE
             reloadDir()
