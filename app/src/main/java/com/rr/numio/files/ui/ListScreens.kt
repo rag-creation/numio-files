@@ -115,6 +115,15 @@ private fun StarAction(vm: FilesViewModel) {
             openWith(one)
         }
     }
+    // Illustrator files with a PDF inside: one tap to keep a .pdf copy
+    if (one != null && com.rr.numio.files.data.extOf(one) == "ai") {
+        val pdfInside by androidx.compose.runtime.produceState(false, one) {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.rr.numio.files.data.Thumbs.isPdfInside(java.io.File(one))
+            }
+        }
+        if (pdfInside) IconBtn(FIcons.SavePdf, "Save as PDF") { vm.saveAsPdf(one) }
+    }
     IconBtn(FIcons.Info, "Details") { vm.showDetails() }
     StarOnly(vm)
 }

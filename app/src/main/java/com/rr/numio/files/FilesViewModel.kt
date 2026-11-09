@@ -352,6 +352,25 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Saves a PDF-compatible .ai file as a .pdf copy next to it. The .ai stays. */
+    fun saveAsPdf(path: String) {
+        selected.clear()
+        val src = File(path)
+        val parent = src.parentFile ?: return
+        run("Saving as PDF…") {
+            if (!com.rr.numio.files.data.Thumbs.isPdfInside(src)) return@run "This file has no PDF inside, so it can't be saved as PDF"
+            val dest = File(parent, uniqueName(src.name.substringBeforeLast('.') + ".pdf") { File(parent, it).exists() })
+            try {
+                src.copyTo(dest, overwrite = false)
+                FileOps.reindex(getApplication(), listOf(dest.absolutePath))
+                "Saved ${dest.name}"
+            } catch (e: Exception) {
+                dest.delete()
+                "Couldn't save as PDF"
+            }
+        }
+    }
+
     // Clean up
 
     var cleanTab by mutableStateOf(CleanTab.EMPTY); private set
