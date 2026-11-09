@@ -72,40 +72,46 @@ fun IconBtn(icon: ImageVector, label: String, tint: Color = Numio.Text, enabled:
     }
 }
 
-/** Header shown while things are selected. */
+/** Header shown while things are selected: count on top, named actions in their own row below. */
 @Composable
 fun SelectionHeader(count: Int, onClose: () -> Unit, onSelectAll: () -> Unit, extra: @Composable () -> Unit = {}) {
-    Row(
-        Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconBtn(FIcons.Close, "Cancel selection", onClick = onClose)
-        Text(
-            "$count selected",
-            style = MaterialTheme.typography.titleMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        extra()
-        LabeledBtn(FIcons.SelectAll, "All", onClick = onSelectAll)
+    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+        Row(
+            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconBtn(FIcons.Close, "Cancel selection", onClick = onClose)
+            Text(
+                "$count selected",
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            extra()
+            LabeledBtn(FIcons.SelectAll, "Select all", onClick = onSelectAll)
+        }
     }
 }
 
-/** A top-bar icon with its name underneath, so every action is clear. */
+/** An action with its name underneath, so every button is clear. */
 @Composable
 fun LabeledBtn(icon: ImageVector, label: String, tint: Color = Numio.Text, onClick: () -> Unit) {
     Column(
         Modifier
-            .width(54.dp)
             .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 5.dp),
+            .padding(horizontal = 8.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(21.dp))
-        Text(label, color = tint, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Text(label, color = tint, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
     }
 }
 
