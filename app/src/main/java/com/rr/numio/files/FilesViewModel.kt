@@ -49,6 +49,8 @@ sealed interface Overlay {
     data object Cleanup : Overlay
     /** A text file (TXT, Markdown, CSV, JSON, HTML…) in the built-in viewer. */
     data class Text(val path: String, val outside: Boolean) : Overlay
+    /** An Apple Pages / Numbers / Keynote file, shown from the preview inside it. */
+    data class Iwork(val path: String, val outside: Boolean) : Overlay
 }
 
 enum class CleanTab(val label: String) { EMPTY("Empty folders"), LARGE("Large files"), APKS("APK files") }
@@ -297,6 +299,41 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // Apple Pages, Numbers, Keynote
+
+    var iwork by mutableStateOf<com.rr.numio.files.data.IworkPreview?>(null); private set
+
+    fun openIwork(path: String, outside: Boolean = false) {
+        selected.clear()
+        iwork = null
+        overlay = Overlay.Iwork(path, outside)
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            iwork = withContext(Dispatchers.IO) {
+                runCatching {
+                    com.rr.numio.files.data.PagesFile.extract(File(path), File(ctx.cacheDir, "iwork").apply { deleteRecursively() })
+                }.getOrDefault(com.rr.numio.files.data.IworkPreview.Nothing)
+            }
+        }
+    }
+
+    /** Keeps the preview (PDF or picture) as a real file next to the original, or in Download. */
+    fun saveIworkPreview() {
+        val o = overlay as? Overlay.Iwork ?: return
+        val preview = when (val p = iwork) {
+            is com.rr.numio.files.data.IworkPreview.Pdf -> p.file
+            is com.rr.numio.files.data.IworkPreview.Picture -> p.file
+            else -> return
+        }
+        val parent = if (o.outside) Storage.downloads else (File(o.path).parentFile ?: Storage.downloads)
+        run("Saving…") {
+            val dest = File(parent, uniqueName(preview.name) { File(parent, it).exists() })
+            preview.copyTo(dest)
+            FileOps.reindex(getApplication(), listOf(dest.absolutePath))
+            "Saved ${dest.name}" + if (o.outside) " in Download" else ""
+        }
+    }
+
     // Text viewer
 
     fun openText(path: String, outside: Boolean = false) {
@@ -306,8 +343,27 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Opens a ZIP or text file another app handed over ("Open with Files"). */
     fun openFrom(uri: Uri, name: String) {
-        if (com.rr.numio.files.data.extOf(name) == "zip" || !com.rr.numio.files.data.TextFiles.isText(name)) {
+        if (com.rr.numio.files.data.PagesFile.isIwork(name)) {
+            viewModelScope.launch {
+                val ctx = getApplication<Application>()
+                val copy = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val dir = File(ctx.cacheDir, "opened").apply { deleteRecursively(); mkdirs() }
+                        val out = File(dir, name)
+                        ctx.contentResolver.openInputStream(uri)?.use { input -> out.outputStream().use { input.copyTo(it) } }
+                        out.takeIf { it.length() > 0 }
+                    }.getOrNull()
+                }
+                if (copy == null) message = "Couldn't open that file" else openIwork(copy.absolutePath, outside = true)
+            }
+            return
+        }
+        if (com.rr.numio.files.data.extOf(name) == "zip") {
             openZipFrom(uri, name)
+            return
+        }
+        if (!com.rr.numio.files.data.TextFiles.isText(name)) {
+            message = "Files can't show this kind of file yet"
             return
         }
         viewModelScope.launch {

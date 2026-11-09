@@ -39,7 +39,7 @@ object Thumbs {
 
     fun hasPreview(name: String): Boolean = when (categoryOf(name)) {
         Category.IMAGES, Category.VIDEOS, Category.AUDIO -> true
-        Category.DOCS -> extOf(name) == "pdf" || extOf(name) == "ai"
+        Category.DOCS -> extOf(name) == "pdf" || extOf(name) == "ai" || PagesFile.isIwork(name)
         Category.APKS -> extOf(name) == "apk"
         else -> false
     }
@@ -60,7 +60,17 @@ object Thumbs {
                 Category.VIDEOS -> video(f)
                 Category.AUDIO -> albumArt(f)
                 Category.APKS -> apkIcon(context, f)
-                else -> if (extOf(f.name) == "pdf" || extOf(f.name) == "ai") pdfPage(f) else null
+                else -> when {
+                    PagesFile.isIwork(f.name) -> PagesFile.thumbBytes(f)?.let { bytes ->
+                        val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, o)
+                        var sample = 1
+                        while (o.outWidth / (sample * 2) >= PX) sample *= 2
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+                    }
+                    extOf(f.name) == "pdf" || extOf(f.name) == "ai" -> pdfPage(f)
+                    else -> null
+                }
             }
         } catch (e: Throwable) {
             null
