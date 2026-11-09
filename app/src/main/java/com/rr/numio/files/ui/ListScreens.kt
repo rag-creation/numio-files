@@ -110,7 +110,7 @@ private fun StarAction(vm: FilesViewModel) {
     val one = vm.selected.singleOrNull()
     val openWith = LocalOpenWith.current
     if (one != null && java.io.File(one).isFile) {
-        IconBtn(FIcons.OpenWith, "Open with…") {
+        LabeledBtn(FIcons.OpenWith, "Open with") {
             vm.clearSelection()
             openWith(one)
         }
@@ -122,16 +122,16 @@ private fun StarAction(vm: FilesViewModel) {
                 com.rr.numio.files.data.Thumbs.isPdfInside(java.io.File(one))
             }
         }
-        if (pdfInside) IconBtn(FIcons.SavePdf, "Save as PDF") { vm.saveAsPdf(one) }
+        if (pdfInside) LabeledBtn(FIcons.SavePdf, "Save PDF", tint = Numio.AmberText) { vm.saveAsPdf(one) }
     }
-    IconBtn(FIcons.Info, "Details") { vm.showDetails() }
+    LabeledBtn(FIcons.Info, "Details") { vm.showDetails() }
     StarOnly(vm)
 }
 
 @Composable
 private fun StarOnly(vm: FilesViewModel) {
     val all = vm.selected.all { it in vm.starred }
-    IconBtn(if (all) FIcons.StarFilled else FIcons.Star, if (all) "Remove from Starred" else "Add to Starred", tint = Numio.AmberText) {
+    LabeledBtn(if (all) FIcons.StarFilled else FIcons.Star, if (all) "Unstar" else "Star", tint = Numio.AmberText) {
         vm.toggleStarSelected()
     }
 }

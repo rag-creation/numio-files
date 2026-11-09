@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -79,9 +80,32 @@ fun SelectionHeader(count: Int, onClose: () -> Unit, onSelectAll: () -> Unit, ex
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconBtn(FIcons.Close, "Cancel selection", onClick = onClose)
-        Text("$count selected", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+        Text(
+            "$count selected",
+            style = MaterialTheme.typography.titleMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
         extra()
-        IconBtn(FIcons.SelectAll, "Select all", onClick = onSelectAll)
+        LabeledBtn(FIcons.SelectAll, "All", onClick = onSelectAll)
+    }
+}
+
+/** A top-bar icon with its name underneath, so every action is clear. */
+@Composable
+fun LabeledBtn(icon: ImageVector, label: String, tint: Color = Numio.Text, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .width(54.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(21.dp))
+        Text(label, color = tint, fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
     }
 }
 
