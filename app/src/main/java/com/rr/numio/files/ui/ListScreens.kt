@@ -173,6 +173,7 @@ private fun StarOnly(vm: FilesViewModel) {
     }
 }
 
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit, onNewFolder: () -> Unit) {
     val atRoot = vm.dir.absolutePath == vm.root.absolutePath
@@ -187,6 +188,10 @@ fun BrowseScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit, onNewFolder: 
                 SortButton(vm)
             }
         }
+        androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+            isRefreshing = vm.refreshing,
+            onRefresh = vm::pullRefresh,
+        ) {
         Files(
             vm, vm.dirItems, onOpenFile,
             header = {
@@ -203,6 +208,7 @@ fun BrowseScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit, onNewFolder: 
             empty = { EmptyNote("This folder is empty", "Paste or create something here.") },
             grid = vm.isGrid(vm.dir.absolutePath, vm.dirItems),
         )
+        }
     }
 }
 
@@ -286,7 +292,7 @@ fun TrashScreen(vm: FilesViewModel, onEmpty: () -> Unit) {
         LazyColumn(Modifier.fillMaxSize()) {
             item {
                 Text(
-                    "Things here are deleted for good after 30 days.",
+                    "Things here are deleted for good after ${vm.trashDays} days.",
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp),
                 )

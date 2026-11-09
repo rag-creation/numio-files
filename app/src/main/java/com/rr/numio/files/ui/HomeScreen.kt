@@ -3,6 +3,8 @@ package com.rr.numio.files.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -69,6 +71,8 @@ fun HomeScreen(vm: FilesViewModel, onOpen: (String) -> Unit) {
                 item(key = v.dir.absolutePath) { VolumeCard(v) { vm.openDir(v.dir) } }
             }
             item { CategoryGrid(stats, vm::openCategory) }
+            val folders = vm.starredItems.filter { it.isDir }
+            if (folders.isNotEmpty()) item { Shortcuts(folders.map { it.path }) { vm.openDir(java.io.File(it)) } }
             item {
                 Text(
                     "Recent",
@@ -223,5 +227,32 @@ private fun VolumeCard(v: com.rr.numio.files.data.Volume, onOpen: () -> Unit) {
             Text("${formatSize(v.free)} free of ${formatSize(v.total)}", style = MaterialTheme.typography.bodySmall)
         }
         Icon(FIcons.Chevron, null, tint = Numio.TextDim, modifier = Modifier.size(18.dp))
+    }
+}
+
+/** Starred folders, one tap away. */
+@Composable
+private fun Shortcuts(paths: List<String>, onOpen: (String) -> Unit) {
+    Column(Modifier.padding(top = 22.dp)) {
+        Text("Shortcuts", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 20.dp, bottom = 10.dp))
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            paths.forEach { p ->
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Numio.AmberSoft)
+                        .clickable { onOpen(p) }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(FIcons.Folder, null, tint = Numio.AmberText, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(p.substringAfterLast('/'), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Numio.Text)
+                }
+            }
+        }
     }
 }

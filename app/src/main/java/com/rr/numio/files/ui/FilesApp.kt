@@ -67,10 +67,15 @@ fun FilesApp(
     onOpenWith: (String) -> Unit,
     onShare: (List<String>) -> Unit,
     onOpenLink: (String) -> Unit,
+    onAuth: (String, () -> Unit) -> Unit,
 ) {
     Box(Modifier.fillMaxSize().background(Numio.Bg).systemBarsPadding().imePadding()) {
         if (!vm.hasAccess) {
             AccessScreen(onAskAccess)
+            return@Box
+        }
+        if (vm.locked) {
+            LockScreen { onAuth("Unlock Files", vm::unlocked) }
             return@Box
         }
 
@@ -126,7 +131,7 @@ fun FilesApp(
                     vm.tab == Tab.HOME -> HomeScreen(vm, open)
                     vm.tab == Tab.BROWSE -> BrowseScreen(vm, open) { newFolder = true }
                     vm.tab == Tab.STARRED -> StarredScreen(vm, open)
-                    else -> SettingsScreen(vm, onOpenLink)
+                    else -> SettingsScreen(vm, onOpenLink, onAuth)
                 }
             }
             vm.progress?.let { ProgressCard(it, onCancel = vm::cancelJob) }
@@ -161,7 +166,7 @@ fun FilesApp(
                             val first = vm.selected.first().substringAfterLast('/')
                             makingZip = if (vm.selected.size == 1) first.substringBeforeLast('.').ifBlank { first } else "Archive"
                         },
-                        Action("Delete", FIcons.Trash, danger = true) { confirmDelete = true },
+                        Action("Delete", FIcons.Trash, danger = true) { if (vm.askBeforeTrash) confirmDelete = true else vm.deleteSelected() },
                     ),
                 )
                 vm.pending != null && vm.tab == Tab.BROWSE && overlay == null -> PasteBar(vm)
@@ -201,7 +206,7 @@ fun FilesApp(
             val n = vm.selected.size
             Confirm(
                 title = "Move ${if (n == 1) "1 item" else "$n items"} to Trash?",
-                body = "You can restore them from Trash for 30 days.",
+                body = "You can restore them from Trash for ${vm.trashDays} days.",
                 yes = "Move to Trash",
                 onDismiss = { confirmDelete = false },
             ) {
@@ -244,6 +249,27 @@ fun FilesApp(
                 vm.emptyTrash()
             }
         }
+    }
+}
+
+/** Files is locked: one button, and the fingerprint prompt opens straight away. */
+@Composable
+private fun LockScreen(onUnlock: () -> Unit) {
+    LaunchedEffect(Unit) { onUnlock() }
+    Column(
+        Modifier.fillMaxSize().padding(28.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Wordmark(height = 30)
+        Spacer(Modifier.height(28.dp))
+        Text("Files is locked", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(28.dp))
+        Button(
+            onClick = onUnlock,
+            colors = ButtonDefaults.buttonColors(containerColor = Numio.Amber, contentColor = Numio.OnAmber),
+            modifier = Modifier.height(52.dp),
+        ) { Text("Unlock", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Numio.OnAmber) }
     }
 }
 

@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
                     onOpenWith = ::openWith,
                     onShare = ::share,
                     onOpenLink = ::openLink,
+                    onAuth = ::authenticate,
                 )
             }
         }
@@ -90,8 +91,60 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        vm.onReturn()
         // Coming back from the "All files access" screen
         vm.checkAccess()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        vm.onLeave()
+    }
+
+    private var afterOldLock: (() -> Unit)? = null
+    private val oldLock = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == RESULT_OK) afterOldLock?.invoke()
+        afterOldLock = null
+    }
+
+    /**
+     * Asks for the fingerprint, face or the phone's own PIN / pattern, using
+     * Android's built-in prompt (no extra library). [ok] runs only on success.
+     */
+    private fun authenticate(reason: String, ok: () -> Unit) {
+        val km = getSystemService(android.app.KeyguardManager::class.java)
+        if (km == null || !km.isDeviceSecure) {
+            Toast.makeText(this, "Set a screen lock (PIN, pattern or fingerprint) on the phone first.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val b = android.hardware.biometrics.BiometricPrompt.Builder(this)
+                .setTitle("Files by Numio")
+                .setSubtitle(reason)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                b.setAllowedAuthenticators(
+                    android.hardware.biometrics.BiometricManager.Authenticators.BIOMETRIC_WEAK or
+                        android.hardware.biometrics.BiometricManager.Authenticators.DEVICE_CREDENTIAL,
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                b.setDeviceCredentialAllowed(true)
+            }
+            b.build().authenticate(
+                android.os.CancellationSignal(),
+                mainExecutor,
+                object : android.hardware.biometrics.BiometricPrompt.AuthenticationCallback() {
+                    override fun onAuthenticationSucceeded(result: android.hardware.biometrics.BiometricPrompt.AuthenticationResult?) = ok()
+                },
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            val i = km.createConfirmDeviceCredentialIntent("Files by Numio", reason)
+            if (i == null) ok() else {
+                afterOldLock = ok
+                oldLock.launch(i)
+            }
+        }
     }
 
     private fun askAccess() {

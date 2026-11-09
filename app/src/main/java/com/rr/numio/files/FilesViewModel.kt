@@ -68,11 +68,56 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     private val trash = Trash(app)
 
     var appTheme by mutableStateOf(prefs.theme); private set
-    var showHidden by mutableStateOf(prefs.showHidden); private set
+    /** With "lock hidden files" on, hidden files start hidden every time Files opens. */
+    var showHidden by mutableStateOf(prefs.showHidden && !prefs.lockHidden); private set
+    var openOnBrowse by mutableStateOf(prefs.openOnBrowse); private set
+    var askBeforeTrash by mutableStateOf(prefs.askBeforeTrash); private set
+    var trashDays by mutableStateOf(prefs.trashDays); private set
+    var lockApp by mutableStateOf(prefs.lockApp); private set
+    var lockHidden by mutableStateOf(prefs.lockHidden); private set
+
+    /** True while the app lock is waiting for a fingerprint or PIN. */
+    var locked by mutableStateOf(prefs.lockApp); private set
+    private var leftAt = 0L
+
+    fun unlocked() {
+        locked = false
+    }
+
+    /** Called when Files goes to the background. */
+    fun onLeave() {
+        leftAt = System.currentTimeMillis()
+    }
+
+    /** Called when Files comes back: lock again after 30 seconds away. */
+    fun onReturn() {
+        if (lockApp && leftAt > 0 && System.currentTimeMillis() - leftAt > 30_000) locked = true
+    }
+
+    fun updateOpenOnBrowse(v: Boolean) { openOnBrowse = v; prefs.openOnBrowse = v }
+    fun updateAskBeforeTrash(v: Boolean) { askBeforeTrash = v; prefs.askBeforeTrash = v }
+    fun updateTrashDays(v: Int) { trashDays = v; prefs.trashDays = v }
+    fun updateLockApp(v: Boolean) { lockApp = v; prefs.lockApp = v }
+    fun updateLockHidden(v: Boolean) {
+        lockHidden = v
+        prefs.lockHidden = v
+    }
+
+    /** Pull down to refresh. */
+    var refreshing by mutableStateOf(false); private set
+
+    fun pullRefresh() {
+        refreshing = true
+        refreshAll()
+        viewModelScope.launch {
+            delay(600)
+            refreshing = false
+        }
+    }
     var sort by mutableStateOf(prefs.sort); private set
 
     var hasAccess by mutableStateOf(false); private set
-    var tab by mutableStateOf(Tab.HOME); private set
+    var tab by mutableStateOf(if (prefs.openOnBrowse) Tab.BROWSE else Tab.HOME); private set
     var overlay by mutableStateOf<Overlay?>(null); private set
 
     var home by mutableStateOf<HomeStats?>(null); private set
@@ -131,7 +176,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         reloadDir()
         viewModelScope.launch {
             val stats = withContext(Dispatchers.IO) {
-                trash.purgeOld()
+                trash.purgeOld(trashDays)
                 val t = trash.entries()
                 trashItems = t
                 Storage.scan(getApplication(), trash.size())

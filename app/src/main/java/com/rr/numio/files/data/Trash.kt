@@ -11,7 +11,7 @@ data class TrashEntry(val file: File, val originalPath: String, val deletedAt: L
 
 /**
  * Deleting moves things into the app's own folder on the same storage, so it is
- * instant and can be undone. Kept 30 days. Note: Android empties this folder if
+ * instant and can be undone. Kept 7, 30 or 90 days (Settings). Note: Android empties this folder if
  * Files is uninstalled.
  */
 class Trash(private val context: Context) {
@@ -83,9 +83,9 @@ class Trash(private val context: Context) {
         writeIndex(index)
     }
 
-    /** Things older than 30 days go for good. */
-    fun purgeOld() {
-        val cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+    /** Things older than [days] go for good. */
+    fun purgeOld(days: Int = 30) {
+        val cutoff = System.currentTimeMillis() - days.toLong() * 24 * 60 * 60 * 1000
         deleteForever(entries().filter { it.deletedAt < cutoff })
     }
 }
