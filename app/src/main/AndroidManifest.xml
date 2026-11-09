@@ -51,6 +51,19 @@
                 <data android:mimeType="application/x-zip-compressed" />
                 <data android:mimeType="application/x-zip" />
             </intent-filter>
+
+            <!-- "Open with Files" for text: TXT, Markdown, CSV, JSON, HTML, XML -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="text/*" />
+                <data android:mimeType="application/json" />
+                <data android:mimeType="application/xml" />
+                <data android:mimeType="application/x-yaml" />
+            </intent-filter>
         </activity>
 
         <!-- Lends single files to other apps when opening or sharing them -->

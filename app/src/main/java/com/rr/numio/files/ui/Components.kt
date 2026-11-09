@@ -5,6 +5,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,17 +72,46 @@ fun IconBtn(icon: ImageVector, label: String, tint: Color = Numio.Text, enabled:
     }
 }
 
-/** Header shown while things are selected. */
+/** Header shown while things are selected: count on top, named actions in their own row below. */
 @Composable
 fun SelectionHeader(count: Int, onClose: () -> Unit, onSelectAll: () -> Unit, extra: @Composable () -> Unit = {}) {
-    Row(
-        Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+        Row(
+            Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconBtn(FIcons.Close, "Cancel selection", onClick = onClose)
+            Text(
+                "$count selected",
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            extra()
+            LabeledBtn(FIcons.SelectAll, "Select all", onClick = onSelectAll)
+        }
+    }
+}
+
+/** An action with its name underneath, so every button is clear. */
+@Composable
+fun LabeledBtn(icon: ImageVector, label: String, tint: Color = Numio.Text, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        IconBtn(FIcons.Close, "Cancel selection", onClick = onClose)
-        Text("$count selected", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-        extra()
-        IconBtn(FIcons.SelectAll, "Select all", onClick = onSelectAll)
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(22.dp))
+        Text(label, color = tint, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
     }
 }
 

@@ -110,19 +110,28 @@ private fun StarAction(vm: FilesViewModel) {
     val one = vm.selected.singleOrNull()
     val openWith = LocalOpenWith.current
     if (one != null && java.io.File(one).isFile) {
-        IconBtn(FIcons.OpenWith, "Open with…") {
+        LabeledBtn(FIcons.OpenWith, "Open with") {
             vm.clearSelection()
             openWith(one)
         }
     }
-    IconBtn(FIcons.Info, "Details") { vm.showDetails() }
+    // Illustrator files with a PDF inside: one tap to keep a .pdf copy
+    if (one != null && com.rr.numio.files.data.extOf(one) == "ai") {
+        val pdfInside by androidx.compose.runtime.produceState(false, one) {
+            value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.rr.numio.files.data.Thumbs.isPdfInside(java.io.File(one))
+            }
+        }
+        if (pdfInside) LabeledBtn(FIcons.SavePdf, "Save PDF", tint = Numio.AmberText) { vm.saveAsPdf(one) }
+    }
+    LabeledBtn(FIcons.Info, "Details") { vm.showDetails() }
     StarOnly(vm)
 }
 
 @Composable
 private fun StarOnly(vm: FilesViewModel) {
     val all = vm.selected.all { it in vm.starred }
-    IconBtn(if (all) FIcons.StarFilled else FIcons.Star, if (all) "Remove from Starred" else "Add to Starred", tint = Numio.AmberText) {
+    LabeledBtn(if (all) FIcons.StarFilled else FIcons.Star, if (all) "Unstar" else "Star", tint = Numio.AmberText) {
         vm.toggleStarSelected()
     }
 }
