@@ -112,6 +112,15 @@ class MainActivity : ComponentActivity() {
      * Android's built-in prompt (no extra library). [ok] runs only on success.
      */
     private fun authenticate(reason: String, ok: () -> Unit) {
+        try {
+            prompt(reason, ok)
+        } catch (e: Exception) {
+            // Never crash over the lock; say what happened instead
+            Toast.makeText(this, "Couldn't show the unlock prompt: ${e.message ?: "unknown error"}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun prompt(reason: String, ok: () -> Unit) {
         val km = getSystemService(android.app.KeyguardManager::class.java)
         if (km == null || !km.isDeviceSecure) {
             Toast.makeText(this, "Set a screen lock (PIN, pattern or fingerprint) on the phone first.", Toast.LENGTH_LONG).show()
