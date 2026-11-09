@@ -82,7 +82,11 @@ fun FilesApp(
 
         // ZIPs open inside Files; everything else in the app that handles it
         val open: (String) -> Unit = { p ->
-            if (com.rr.numio.files.data.extOf(p) == "zip") vm.openZip(p) else onOpen(p)
+            when {
+                com.rr.numio.files.data.extOf(p) == "zip" -> vm.openZip(p)
+                com.rr.numio.files.data.TextFiles.isText(p.substringAfterLast('/')) -> vm.openText(p)
+                else -> onOpen(p)
+            }
         }
         var confirmEmptyFolders by remember { mutableStateOf(false) }
         var makingZip by remember { mutableStateOf<String?>(null) }
@@ -110,6 +114,7 @@ fun FilesApp(
                 when {
                     overlay is Overlay.Cat && overlay.category == Category.TRASH -> TrashScreen(vm) { confirmEmpty = true }
                     overlay == Overlay.Cleanup -> CleanupScreen(vm, open)
+                    overlay is Overlay.Text -> TextViewerScreen(vm, overlay)
                     overlay is Overlay.Zip -> ZipScreen(vm, overlay) { entry -> vm.openZipEntry(entry, onOpen) }
                     overlay is Overlay.Cat -> CategoryScreen(vm, overlay.category, open)
                     overlay == Overlay.Search -> SearchScreen(vm, open)

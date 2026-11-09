@@ -47,6 +47,8 @@ sealed interface Overlay {
     /** Looking inside a ZIP; [inner] is the folder in it ("" = top). */
     data class Zip(val path: String, val inner: String, val outside: Boolean) : Overlay
     data object Cleanup : Overlay
+    /** A text file (TXT, Markdown, CSV, JSON, HTML…) in the built-in viewer. */
+    data class Text(val path: String, val outside: Boolean) : Overlay
 }
 
 enum class CleanTab(val label: String) { EMPTY("Empty folders"), LARGE("Large files"), APKS("APK files") }
@@ -292,6 +294,61 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
                 FileOps.reindex(getApplication(), listOf(dest.absolutePath))
                 "Made ${dest.name}"
             } else "Couldn't make the ZIP"
+        }
+    }
+
+    // Text viewer
+
+    fun openText(path: String, outside: Boolean = false) {
+        selected.clear()
+        overlay = Overlay.Text(path, outside)
+    }
+
+    /** Opens a ZIP or text file another app handed over ("Open with Files"). */
+    fun openFrom(uri: Uri, name: String) {
+        if (com.rr.numio.files.data.extOf(name) == "zip" || !com.rr.numio.files.data.TextFiles.isText(name)) {
+            openZipFrom(uri, name)
+            return
+        }
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val copy = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = File(ctx.cacheDir, "opened").apply { deleteRecursively(); mkdirs() }
+                    val out = File(dir, name)
+                    ctx.contentResolver.openInputStream(uri)?.use { input -> out.outputStream().use { input.copyTo(it) } }
+                    out.takeIf { it.exists() }
+                }.getOrNull()
+            }
+            if (copy == null) message = "Couldn't open that file" else openText(copy.absolutePath, outside = true)
+        }
+    }
+
+    /** Saves edited text over the file, then calls [done] on success. */
+    fun saveText(path: String, text: String, done: () -> Unit) {
+        if (busy) return
+        busy = true
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    val f = File(path)
+                    // Write to a side file first, so a failed save never empties the original
+                    val tmp = File(f.parentFile, ".${f.name}.saving")
+                    tmp.writeText(text)
+                    tmp.setLastModified(System.currentTimeMillis())
+                    if (!tmp.renameTo(f)) {
+                        f.writeText(text)
+                        tmp.delete()
+                    }
+                    true
+                }.getOrDefault(false)
+            }
+            busy = false
+            message = if (ok) "Saved" else "Couldn't save"
+            if (ok) {
+                FileOps.reindex(getApplication(), listOf(path))
+                done()
+            }
         }
     }
 

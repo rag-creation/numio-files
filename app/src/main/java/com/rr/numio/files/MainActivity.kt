@@ -63,10 +63,12 @@ class MainActivity : ComponentActivity() {
         if (intent?.action != Intent.ACTION_VIEW) return
         val uri = intent.data ?: return
         if (uri.scheme == "file") {
-            uri.path?.let { vm.openZip(it, outside = true) }
+            val path = uri.path ?: return
+            if (com.rr.numio.files.data.TextFiles.isText(path.substringAfterLast('/'))) vm.openText(path, outside = true)
+            else vm.openZip(path, outside = true)
             return
         }
-        var name = "archive.zip"
+        var name = "file"
         try {
             contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
                 if (c.moveToFirst() && !c.isNull(0)) name = c.getString(0)
@@ -74,7 +76,14 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             // Some apps don't say the name
         }
-        vm.openZipFrom(uri, name.substringAfterLast('/'))
+        name = name.substringAfterLast('/')
+        // Some apps send no file name: guess the ending from the type they give
+        if (com.rr.numio.files.data.extOf(name).isEmpty()) {
+            val ext = intent.type?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
+                ?: when (intent.type) { "text/markdown" -> "md"; "text/plain" -> "txt"; else -> null }
+            if (ext != null) name = name.substringBeforeLast('.') + "." + ext
+        }
+        vm.openFrom(uri, name)
     }
 
     override fun onResume() {
