@@ -72,6 +72,11 @@ Part of [Numio](https://getnumio.org) — small, honest apps made by a Keralite.
 - ✅ **Duplicates** — same content checked by fingerprint, not just by name
 - ✅ **Large files** and **APK files**, to Trash
 
+### 🔒 Privacy
+- ✅ **Lock Files** with your fingerprint or the phone's PIN
+- ✅ **Lock hidden files** — they stay hidden until you unlock them
+- ✅ Starred folders as **shortcuts** on Home; Trash keeps things 7, 30 or 90 days
+
 ### 🎨 Numio look
 - ✅ Dark, light, or follow the phone
 - ✅ The Numio amber, everywhere it counts
