@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
         if (uri.scheme == "file") {
             val path = uri.path ?: return
             if (com.rr.numio.files.data.PagesFile.isIwork(path)) vm.openIwork(path, outside = true)
+            else if (com.rr.numio.files.data.OfficeFiles.isOffice(path)) vm.openOffice(path, outside = true)
             else if (com.rr.numio.files.data.TextFiles.isText(path.substringAfterLast('/'))) vm.openText(path, outside = true)
             else vm.openZip(path, outside = true)
             return

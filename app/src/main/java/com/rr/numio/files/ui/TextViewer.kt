@@ -212,11 +212,17 @@ private fun Readable(html: String) {
 @Composable
 private fun CsvTable(text: String) {
     val rows = remember(text) { TextFiles.csv(text, maxRows = 500) }
+    TableView(rows)
+}
+
+/** A table: first row is the header in amber; scrolls both ways. Also used for Excel sheets. */
+@Composable
+fun TableView(rows: List<List<String>>) {
     if (rows.isEmpty()) {
-        EmptyNote("Empty file", "")
+        EmptyNote("Empty", "Nothing in here.")
         return
     }
-    val cols = rows.maxOf { it.size }
+    val cols = rows.maxOf { it.size }.coerceAtLeast(1)
     val widths = remember(rows) {
         (0 until cols).map { c -> (rows.take(200).maxOf { it.getOrNull(c)?.length ?: 0 }.coerceIn(3, 30) * 8 + 24).dp }
     }

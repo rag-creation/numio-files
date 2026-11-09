@@ -52,7 +52,7 @@
                 <data android:mimeType="application/x-zip" />
             </intent-filter>
 
-            <!-- "Open with Files" for Apple Pages, Numbers and Keynote files from iPhones and Macs.
+            <!-- "Open with Files" for Apple Pages, Numbers and Keynote files, and Word / Excel files.
                  Chat apps often send them as plain "octet-stream", so that is accepted too;
                  Files then decides by the file name what it can show. -->
             <intent-filter>
@@ -68,6 +68,8 @@
                 <data android:mimeType="application/vnd.apple.keynote" />
                 <data android:mimeType="application/x-iwork-keynote-sffkey" />
                 <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+                <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
             </intent-filter>
 
             <!-- "Open with Files" for text: TXT, Markdown, CSV, JSON, HTML, XML -->

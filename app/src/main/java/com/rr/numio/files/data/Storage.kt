@@ -103,10 +103,45 @@ object Storage {
         FileItem(f.absolutePath, f.name, false, f.length(), f.lastModified())
     }
 
-    /** Name search through every folder, stopping after [limit] hits. */
-    fun search(query: String, showHidden: Boolean, limit: Int = 300): List<FileItem> {
+    /**
+     * Name search. Asks Android's file index first (near-instant, files and folders);
+     * walks the folders only when hidden files are shown, since the index skips those.
+     */
+    fun search(context: Context, query: String, showHidden: Boolean, limit: Int = 300): List<FileItem> {
         val q = query.trim().lowercase()
         if (q.isEmpty()) return emptyList()
+        if (showHidden) return walkSearch(q, limit)
+        val out = ArrayList<FileItem>()
+        val seen = HashSet<String>()
+        @Suppress("DEPRECATION")
+        val dataCol = MediaStore.Files.FileColumns.DATA
+        val like = "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        try {
+            context.contentResolver.query(
+                MediaStore.Files.getContentUri("external"),
+                arrayOf(dataCol),
+                "$dataCol LIKE ? ESCAPE '\\'",
+                arrayOf(like),
+                "${MediaStore.Files.FileColumns.DATE_MODIFIED} DESC",
+            )?.use { c ->
+                while (c.moveToNext() && out.size < limit) {
+                    val path = c.getString(0) ?: continue
+                    val name = path.substringAfterLast('/')
+                    // Match the name itself, not a folder somewhere above it
+                    if (!name.lowercase().contains(q) || name.startsWith(".") || "/." in path) continue
+                    if (path.startsWith(root.absolutePath + "/Android/")) continue
+                    if (!seen.add(path)) continue
+                    val f = File(path)
+                    if (f.exists()) out.add(toItem(f))
+                }
+            }
+        } catch (e: Exception) {
+            return walkSearch(q, limit)
+        }
+        return out
+    }
+
+    private fun walkSearch(q: String, limit: Int): List<FileItem> {
         val out = ArrayList<FileItem>()
         val stack = ArrayDeque<File>()
         stack.add(root)
@@ -115,8 +150,7 @@ object Storage {
             // Android/data and Android/obb belong to other apps
             if (dir.absolutePath == root.absolutePath + "/Android") continue
             for (f in dir.listFiles() ?: continue) {
-                if (!showHidden && f.name.startsWith(".")) continue
-                if (f.name.lowercase().contains(q)) out.add(toItem(f))
+                if (f.name.lowercase().contains(q)) out.add(toItem(f, showHidden = true))
                 if (f.isDirectory) stack.add(f)
                 if (out.size >= limit) break
             }

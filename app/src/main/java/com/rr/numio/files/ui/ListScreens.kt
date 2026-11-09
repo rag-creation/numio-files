@@ -305,14 +305,20 @@ fun SearchScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit) {
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = Numio.Text),
                         cursorBrush = SolidColor(Numio.Amber),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { vm.commitSearch() }),
                         modifier = Modifier.fillMaxWidth().focusRequester(focus),
                     )
                 }
                 if (vm.query.isNotEmpty()) IconBtn(FIcons.Close, "Clear") { vm.search("") }
             }
         }
+        if (vm.query.isEmpty() && vm.selected.isEmpty()) {
+            SearchStart(vm)
+            return@Column
+        }
         Files(
-            vm, vm.results, onOpenFile,
+            vm, vm.results, { path -> vm.commitSearch(); onOpenFile(path) },
             header = {
                 if (vm.searching) Text("Searching…", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 20.dp, bottom = 6.dp))
                 else if (vm.query.isNotBlank()) Text(
@@ -457,6 +463,46 @@ fun CleanupScreen(vm: FilesViewModel, onOpenFile: (String) -> Unit) {
                 }
             }
             item { Spacer(Modifier.height(24.dp)) }
+        }
+    }
+}
+
+/** Before typing: recent searches and a few quick file types. */
+@Composable
+private fun SearchStart(vm: FilesViewModel) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+        if (vm.history.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Recent searches", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                TextButton(onClick = vm::clearHistory) { Text("Clear", color = Numio.AmberText, fontWeight = FontWeight.Bold) }
+            }
+            Chips(vm.history) { vm.search(it) }
+            Spacer(Modifier.height(20.dp))
+        }
+        Text("Quick", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(bottom = 10.dp))
+        Chips(listOf(".pdf", ".jpg", ".mp4", ".apk", ".zip", ".docx", ".xlsx", "Screenshot", "WhatsApp")) { vm.search(it) }
+    }
+}
+
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun Chips(items: List<String>, onPick: (String) -> Unit) {
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+    ) {
+        items.forEach { t ->
+            Text(
+                t,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Numio.Text,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Numio.Surface)
+                    .clickable { onPick(t) }
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+            )
         }
     }
 }

@@ -19,9 +19,22 @@ android {
         versionName = "0.1.0"
     }
 
+    signingConfigs {
+        // A fixed key just for "Files Test" builds, kept in the repo on purpose, so every
+        // test APK from GitHub can update the last one. It can never sign the real app:
+        // releases are signed by hand with the Numio key, which never leaves RR's computer.
+        create("test") {
+            storeFile = file("test-signing/files-test.keystore")
+            storePassword = "android"
+            keyAlias = "filestest"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         // Test builds install next to the real app as "Files Test"
         debug {
+            signingConfig = signingConfigs.getByName("test")
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }
