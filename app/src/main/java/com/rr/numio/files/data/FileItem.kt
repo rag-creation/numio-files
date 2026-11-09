@@ -39,7 +39,7 @@ private val videos = setOf("mp4", "mkv", "webm", "3gp", "mov", "avi", "m4v", "ts
 private val audio = setOf("mp3", "m4a", "aac", "ogg", "opus", "flac", "wav", "amr", "wma", "mid", "midi")
 private val docs = setOf(
     "pdf", "doc", "docx", "odt", "rtf", "txt", "md", "xls", "xlsx", "ods", "csv", "ppt", "pptx", "odp",
-    "epub", "ai", "json", "xml", "html", "htm", "numio", "vcf", "ics",
+    "epub", "ai", "pages", "numbers", "key", "json", "xml", "html", "htm", "numio", "vcf", "ics",
 )
 private val archives = setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "zst")
 
