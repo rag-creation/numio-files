@@ -5,6 +5,8 @@
   </picture>
 </p>
 
+<p align="center"><img src="docs/files-icon.png" width="120" alt="Files icon" /></p>
+
 <h1 align="center">Files</h1>
 
 <p align="center">
