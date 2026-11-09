@@ -44,8 +44,12 @@ class Trash(private val context: Context) {
     fun size(): Long = entries().sumOf { if (it.file.isDirectory) it.file.walk().sumOf { f -> f.length() } else it.file.length() }
 
     /** Moves into Trash. Returns how many failed. */
-    fun moveIn(files: List<File>): Int {
-        val d = dir ?: return files.size
+    fun moveIn(files: List<File>): Int = moveInKeys(files).second
+
+    /** Moves into Trash; returns the Trash names of what moved (for Undo) and how many failed. */
+    fun moveInKeys(files: List<File>): Pair<List<String>, Int> {
+        val d = dir ?: return emptyList<String>() to files.size
+        val moved = ArrayList<String>()
         val index = readIndex()
         var failed = 0
         val now = System.currentTimeMillis()
@@ -53,11 +57,17 @@ class Trash(private val context: Context) {
             val key = uniqueName("${now}_${f.name}") { File(d, it).exists() }
             val dest = File(d, key)
             val ok = f.renameTo(dest) || (runCatching { f.copyRecursively(dest) }.getOrDefault(false) && f.deleteRecursively())
-            if (ok) index.put(key, JSONObject().put("from", f.absolutePath).put("at", now)) else failed++
+            if (ok) {
+                index.put(key, JSONObject().put("from", f.absolutePath).put("at", now))
+                moved.add(key)
+            } else failed++
         }
         writeIndex(index)
-        return failed
+        return moved to failed
     }
+
+    /** Undo: puts back exactly what one delete moved in. */
+    fun restoreKeys(keys: List<String>): Int = restore(entries().filter { it.file.name in keys })
 
     /** Puts things back where they were; a taken name gets " (1)". */
     fun restore(entries: List<TrashEntry>): Int {

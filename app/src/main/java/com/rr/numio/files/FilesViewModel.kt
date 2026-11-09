@@ -634,8 +634,9 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         val paths = selected.toList()
         selected.clear()
         run("Moving to Trash…") {
-            val failed = trash.moveIn(paths.map(::File))
+            val (keys, failed) = trash.moveInKeys(paths.map(::File))
             FileOps.reindex(getApplication(), paths)
+            undoKeys = keys
             if (failed == 0) "${items(paths.size)} moved to Trash" else "$failed couldn't be moved to Trash"
         }
         afterClean()
@@ -818,10 +819,27 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         val paths = selected.toList()
         selected.clear()
         run("Moving to Trash…") {
-            val failed = trash.moveIn(paths.map(::File))
+            val (keys, failed) = trash.moveInKeys(paths.map(::File))
             starredPathsMoved(paths)
             FileOps.reindex(getApplication(), paths)
+            undoKeys = keys
             if (failed == 0) "${items(paths.size)} moved to Trash" else "$failed couldn't be moved to Trash"
+        }
+    }
+
+    /** What the last delete moved to Trash, while its Undo button is showing. */
+    var undoKeys by mutableStateOf<List<String>>(emptyList())
+
+    fun undoDelete() {
+        val keys = undoKeys
+        undoKeys = emptyList()
+        message = null
+        if (keys.isEmpty()) return
+        run("Putting back…") {
+            val failed = trash.restoreKeys(keys)
+            val back = keys.size - failed
+            if (overlay == Overlay.Cleanup) viewModelScope.launch { scanCleanup() }
+            if (failed == 0) "${items(back)} put back" else "$back put back, $failed couldn't be"
         }
     }
 

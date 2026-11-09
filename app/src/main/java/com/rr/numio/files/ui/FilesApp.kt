@@ -507,20 +507,30 @@ private fun NavBar(vm: FilesViewModel) {
 @Composable
 private fun Snack(vm: FilesViewModel) {
     val msg = vm.message ?: return
+    val canUndo = vm.undoKeys.isNotEmpty() && msg.contains("moved to Trash")
     LaunchedEffect(msg) {
-        delay(2600)
-        if (vm.message == msg) vm.message = null
+        // A little longer when there's an Undo button to reach
+        delay(if (canUndo) 6000 else 2600)
+        if (vm.message == msg) {
+            vm.message = null
+            vm.undoKeys = emptyList()
+        }
     }
     Box(Modifier.fillMaxSize().padding(bottom = 96.dp, start = 20.dp, end = 20.dp), contentAlignment = Alignment.BottomCenter) {
-        Text(
-            msg,
-            color = if (Numio.palette.isDark) Numio.Bg else Numio.Text,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
+        Row(
+            Modifier
                 .clip(RoundedCornerShape(14.dp))
                 .background(if (Numio.palette.isDark) Numio.Text else Numio.SurfaceHigh)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        )
+                .padding(start = 16.dp, end = if (canUndo) 4.dp else 16.dp, top = if (canUndo) 2.dp else 12.dp, bottom = if (canUndo) 2.dp else 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(msg, color = if (Numio.palette.isDark) Numio.Bg else Numio.Text, fontWeight = FontWeight.Medium)
+            if (canUndo) {
+                TextButton(onClick = vm::undoDelete) {
+                    Text("Undo", color = if (Numio.palette.isDark) Color(0xFF7A5600) else Numio.AmberText, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
 
