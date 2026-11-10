@@ -19,8 +19,8 @@ import java.io.File
  * photos, video frames, an APK's own app icon, and album art.
  */
 object Thumbs {
-    private const val PX = 160
-    private val cache = object : LruCache<String, Bitmap>(24 * 1024 * 1024) {
+    private const val PX = 256
+    private val cache = object : LruCache<String, Bitmap>(48 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
     /** Files that have no preview, so we don't try again while scrolling. */
@@ -56,7 +56,11 @@ object Thumbs {
         val f = File(path)
         val bmp = try {
             when (categoryOf(f.name)) {
-                Category.IMAGES -> image(f)
+                Category.IMAGES -> when (extOf(f.name)) {
+                    "psd" -> psd(f, PX)
+                    "svg" -> SvgFiles.render(f, PX)
+                    else -> image(f)
+                }
                 Category.VIDEOS -> video(f)
                 Category.AUDIO -> albumArt(f)
                 Category.APKS -> apkIcon(context, f)
@@ -130,6 +134,12 @@ object Thumbs {
                 }
             }
         }
+    }
+
+    /** The flat picture inside a Photoshop file, shrunk to at most [maxSide] pixels. */
+    fun psd(f: File, maxSide: Int): Bitmap {
+        val px = Psd.decode(f, maxSide)
+        return Bitmap.createBitmap(px.argb, px.width, px.height, Bitmap.Config.ARGB_8888)
     }
 
     private fun apkIcon(context: Context, f: File): Bitmap? {

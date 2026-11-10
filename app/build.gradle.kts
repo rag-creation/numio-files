@@ -72,6 +72,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
+    // Draws .svg pictures (Apache-2.0, offline, no network code)
+    implementation(libs.androidsvg)
+
     testImplementation(libs.junit)
 
     debugImplementation(libs.androidx.compose.ui.tooling)

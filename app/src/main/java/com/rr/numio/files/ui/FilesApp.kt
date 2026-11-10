@@ -67,10 +67,15 @@ fun FilesApp(
     onOpenWith: (String) -> Unit,
     onShare: (List<String>) -> Unit,
     onOpenLink: (String) -> Unit,
+    onAuth: (String, () -> Unit) -> Unit,
 ) {
     Box(Modifier.fillMaxSize().background(Numio.Bg).systemBarsPadding().imePadding()) {
         if (!vm.hasAccess) {
             AccessScreen(onAskAccess)
+            return@Box
+        }
+        if (vm.locked) {
+            LockScreen { onAuth("Unlock Files", vm::unlocked) }
             return@Box
         }
 
@@ -84,6 +89,7 @@ fun FilesApp(
         val open: (String) -> Unit = { p ->
             when {
                 com.rr.numio.files.data.extOf(p) == "zip" -> vm.openZip(p)
+                com.rr.numio.files.data.extOf(p) == "psd" -> vm.openPsd(p, onOpen)
                 com.rr.numio.files.data.PagesFile.isIwork(p) -> vm.openIwork(p)
                 com.rr.numio.files.data.OfficeFiles.isOffice(p) -> vm.openOffice(p)
                 com.rr.numio.files.data.TextFiles.isText(p.substringAfterLast('/')) -> vm.openText(p)
@@ -125,7 +131,7 @@ fun FilesApp(
                     vm.tab == Tab.HOME -> HomeScreen(vm, open)
                     vm.tab == Tab.BROWSE -> BrowseScreen(vm, open) { newFolder = true }
                     vm.tab == Tab.STARRED -> StarredScreen(vm, open)
-                    else -> SettingsScreen(vm, onOpenLink)
+                    else -> SettingsScreen(vm, onOpenLink, onAuth)
                 }
             }
             vm.progress?.let { ProgressCard(it, onCancel = vm::cancelJob) }
@@ -160,7 +166,7 @@ fun FilesApp(
                             val first = vm.selected.first().substringAfterLast('/')
                             makingZip = if (vm.selected.size == 1) first.substringBeforeLast('.').ifBlank { first } else "Archive"
                         },
-                        Action("Delete", FIcons.Trash, danger = true) { confirmDelete = true },
+                        Action("Delete", FIcons.Trash, danger = true) { if (vm.askBeforeTrash) confirmDelete = true else vm.deleteSelected() },
                     ),
                 )
                 vm.pending != null && vm.tab == Tab.BROWSE && overlay == null -> PasteBar(vm)
@@ -200,7 +206,7 @@ fun FilesApp(
             val n = vm.selected.size
             Confirm(
                 title = "Move ${if (n == 1) "1 item" else "$n items"} to Trash?",
-                body = "You can restore them from Trash for 30 days.",
+                body = "You can restore them from Trash for ${vm.trashDays} days.",
                 yes = "Move to Trash",
                 onDismiss = { confirmDelete = false },
             ) {
@@ -243,6 +249,27 @@ fun FilesApp(
                 vm.emptyTrash()
             }
         }
+    }
+}
+
+/** Files is locked: one button, and the fingerprint prompt opens straight away. */
+@Composable
+private fun LockScreen(onUnlock: () -> Unit) {
+    LaunchedEffect(Unit) { onUnlock() }
+    Column(
+        Modifier.fillMaxSize().padding(28.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Wordmark(height = 30)
+        Spacer(Modifier.height(28.dp))
+        Text("Files is locked", style = MaterialTheme.typography.headlineMedium)
+        Spacer(Modifier.height(28.dp))
+        Button(
+            onClick = onUnlock,
+            colors = ButtonDefaults.buttonColors(containerColor = Numio.Amber, contentColor = Numio.OnAmber),
+            modifier = Modifier.height(52.dp),
+        ) { Text("Unlock", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Numio.OnAmber) }
     }
 }
 
@@ -480,20 +507,30 @@ private fun NavBar(vm: FilesViewModel) {
 @Composable
 private fun Snack(vm: FilesViewModel) {
     val msg = vm.message ?: return
+    val canUndo = vm.undoKeys.isNotEmpty() && msg.contains("moved to Trash")
     LaunchedEffect(msg) {
-        delay(2600)
-        if (vm.message == msg) vm.message = null
+        // A little longer when there's an Undo button to reach
+        delay(if (canUndo) 6000 else 2600)
+        if (vm.message == msg) {
+            vm.message = null
+            vm.undoKeys = emptyList()
+        }
     }
     Box(Modifier.fillMaxSize().padding(bottom = 96.dp, start = 20.dp, end = 20.dp), contentAlignment = Alignment.BottomCenter) {
-        Text(
-            msg,
-            color = if (Numio.palette.isDark) Numio.Bg else Numio.Text,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier
+        Row(
+            Modifier
                 .clip(RoundedCornerShape(14.dp))
                 .background(if (Numio.palette.isDark) Numio.Text else Numio.SurfaceHigh)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-        )
+                .padding(start = 16.dp, end = if (canUndo) 4.dp else 16.dp, top = if (canUndo) 2.dp else 12.dp, bottom = if (canUndo) 2.dp else 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(msg, color = if (Numio.palette.isDark) Numio.Bg else Numio.Text, fontWeight = FontWeight.Medium)
+            if (canUndo) {
+                TextButton(onClick = vm::undoDelete) {
+                    Text("Undo", color = if (Numio.palette.isDark) Color(0xFF7A5600) else Numio.AmberText, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }
 

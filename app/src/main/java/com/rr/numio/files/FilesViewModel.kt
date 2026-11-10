@@ -55,7 +55,7 @@ sealed interface Overlay {
     data class Office(val path: String, val outside: Boolean) : Overlay
 }
 
-enum class CleanTab(val label: String) { EMPTY("Empty folders"), LARGE("Large files"), APKS("APK files") }
+enum class CleanTab(val label: String) { EMPTY("Empty folders"), DUPES("Duplicates"), LARGE("Large files"), APKS("APK files") }
 
 /**
  * Files picked for Copy or Move, waiting for "Paste here".
@@ -68,11 +68,56 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     private val trash = Trash(app)
 
     var appTheme by mutableStateOf(prefs.theme); private set
-    var showHidden by mutableStateOf(prefs.showHidden); private set
+    /** With "lock hidden files" on, hidden files start hidden every time Files opens. */
+    var showHidden by mutableStateOf(prefs.showHidden && !prefs.lockHidden); private set
+    var openOnBrowse by mutableStateOf(prefs.openOnBrowse); private set
+    var askBeforeTrash by mutableStateOf(prefs.askBeforeTrash); private set
+    var trashDays by mutableStateOf(prefs.trashDays); private set
+    var lockApp by mutableStateOf(prefs.lockApp); private set
+    var lockHidden by mutableStateOf(prefs.lockHidden); private set
+
+    /** True while the app lock is waiting for a fingerprint or PIN. */
+    var locked by mutableStateOf(prefs.lockApp); private set
+    private var leftAt = 0L
+
+    fun unlocked() {
+        locked = false
+    }
+
+    /** Called when Files goes to the background. */
+    fun onLeave() {
+        leftAt = System.currentTimeMillis()
+    }
+
+    /** Called when Files comes back: lock again after 30 seconds away. */
+    fun onReturn() {
+        if (lockApp && leftAt > 0 && System.currentTimeMillis() - leftAt > 30_000) locked = true
+    }
+
+    fun updateOpenOnBrowse(v: Boolean) { openOnBrowse = v; prefs.openOnBrowse = v }
+    fun updateAskBeforeTrash(v: Boolean) { askBeforeTrash = v; prefs.askBeforeTrash = v }
+    fun updateTrashDays(v: Int) { trashDays = v; prefs.trashDays = v }
+    fun updateLockApp(v: Boolean) { lockApp = v; prefs.lockApp = v }
+    fun updateLockHidden(v: Boolean) {
+        lockHidden = v
+        prefs.lockHidden = v
+    }
+
+    /** Pull down to refresh. */
+    var refreshing by mutableStateOf(false); private set
+
+    fun pullRefresh() {
+        refreshing = true
+        refreshAll()
+        viewModelScope.launch {
+            delay(600)
+            refreshing = false
+        }
+    }
     var sort by mutableStateOf(prefs.sort); private set
 
     var hasAccess by mutableStateOf(false); private set
-    var tab by mutableStateOf(Tab.HOME); private set
+    var tab by mutableStateOf(if (prefs.openOnBrowse) Tab.BROWSE else Tab.HOME); private set
     var overlay by mutableStateOf<Overlay?>(null); private set
 
     var home by mutableStateOf<HomeStats?>(null); private set
@@ -94,7 +139,15 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     var message by mutableStateOf<String?>(null)
     var busy by mutableStateOf(false); private set
 
-    val root: File get() = Storage.root
+    /** Plugged-in storage: internal, SD cards, USB drives. */
+    var volumes by mutableStateOf<List<com.rr.numio.files.data.Volume>>(emptyList()); private set
+
+    /** The top of whichever storage the open folder is on. */
+    val root: File get() = volumeOf(dir)?.dir ?: Storage.root
+
+    fun volumeOf(f: File): com.rr.numio.files.data.Volume? =
+        volumes.filter { f.absolutePath == it.dir.absolutePath || f.absolutePath.startsWith(it.dir.absolutePath + "/") }
+            .maxByOrNull { it.dir.absolutePath.length }
 
     fun checkAccess() {
         val ctx = getApplication<Application>()
@@ -107,15 +160,23 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         val first = ok && !hasAccess
         hasAccess = ok
         if (ok) {
-            if (first) refreshAll() else reloadDir()
+            if (first) refreshAll() else {
+                // An SD card or USB drive may have been plugged in or out meanwhile
+                volumes = runCatching { Storage.volumes(getApplication()) }.getOrDefault(volumes)
+                if (volumeOf(dir) == null && dir.absolutePath != Storage.root.absolutePath && !dir.exists()) {
+                    dir = Storage.root // the drive this folder was on is gone
+                }
+                reloadDir()
+            }
         }
     }
 
     fun refreshAll() {
+        volumes = runCatching { Storage.volumes(getApplication()) }.getOrDefault(emptyList())
         reloadDir()
         viewModelScope.launch {
             val stats = withContext(Dispatchers.IO) {
-                trash.purgeOld()
+                trash.purgeOld(trashDays)
                 val t = trash.entries()
                 trashItems = t
                 Storage.scan(getApplication(), trash.size())
@@ -140,6 +201,31 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
             }
             starredItems = sortItems(items, sort)
         }
+    }
+
+    // Grid or list
+
+    private var viewChoices by mutableStateOf(prefs.viewChoices)
+
+    /**
+     * Grid if the person chose it for this folder; otherwise grid when the folder
+     * is mostly photos and videos (DCIM, Screenshots, WhatsApp Images…).
+     */
+    fun isGrid(key: String, items: List<FileItem>): Boolean {
+        if ("g:$key" in viewChoices) return true
+        if ("l:$key" in viewChoices) return false
+        if (key == "cat:IMAGES" || key == "cat:VIDEOS") return true
+        val files = items.filter { !it.isDir }
+        if (files.size < 6) return false
+        val media = files.count { com.rr.numio.files.data.categoryOf(it.name).let { c -> c == Category.IMAGES || c == Category.VIDEOS } }
+        return media * 10 >= files.size * 7
+    }
+
+    fun toggleGrid(key: String, items: List<FileItem>) {
+        val nowGrid = isGrid(key, items)
+        val next = viewChoices.filter { it != "g:$key" && it != "l:$key" }.toSet() + (if (nowGrid) "l:$key" else "g:$key")
+        viewChoices = next
+        prefs.viewChoices = next
     }
 
     // Navigation
@@ -443,12 +529,77 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Photoshop files: the flat picture inside, as a PNG another app can show. */
+    fun openPsd(path: String, open: (String) -> Unit) {
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            busy = true
+            val png = withContext(Dispatchers.IO) {
+                runCatching {
+                    val src = File(path)
+                    val dir = File(ctx.cacheDir, "psd").apply { deleteRecursively(); mkdirs() }
+                    val out = File(dir, src.name.substringBeforeLast('.') + ".png")
+                    val bmp = com.rr.numio.files.data.Thumbs.psd(src, 2048)
+                    out.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    out
+                }
+            }
+            busy = false
+            png.onSuccess { open(it.absolutePath) }.onFailure {
+                message = (it as? com.rr.numio.files.data.Psd.Unsupported)?.message
+                    ?: "This PSD has no flat picture inside. Save it in Photoshop with \"Maximize compatibility\" on."
+            }
+        }
+    }
+
+    /** Saves an SVG drawn as a PNG next to it (in Download if it came from another app). */
+    fun saveSvgPng(path: String, outside: Boolean) {
+        val src = File(path)
+        val parent = if (outside) Storage.downloads else (src.parentFile ?: Storage.downloads)
+        run("Saving PNG…") {
+            val dest = File(parent, uniqueName(src.name.substringBeforeLast('.') + ".png") { File(parent, it).exists() })
+            try {
+                val bmp = com.rr.numio.files.data.SvgFiles.render(src, 2048) ?: throw IllegalStateException()
+                dest.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                FileOps.reindex(getApplication(), listOf(dest.absolutePath))
+                "Saved ${dest.name}" + if (outside) " in Download" else ""
+            } catch (e: Throwable) {
+                dest.delete()
+                "Couldn't draw this SVG"
+            }
+        }
+    }
+
+    /** Saves the flat picture of a PSD as a PNG next to it. */
+    fun savePsdPng(path: String) {
+        selected.clear()
+        val src = File(path)
+        val parent = src.parentFile ?: return
+        run("Saving PNG…") {
+            val dest = File(parent, uniqueName(src.name.substringBeforeLast('.') + ".png") { File(parent, it).exists() })
+            try {
+                val bmp = com.rr.numio.files.data.Thumbs.psd(src, 4096)
+                dest.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                FileOps.reindex(getApplication(), listOf(dest.absolutePath))
+                "Saved ${dest.name}"
+            } catch (e: com.rr.numio.files.data.Psd.Unsupported) {
+                dest.delete()
+                e.message
+            } catch (e: Throwable) {
+                dest.delete()
+                "Couldn't read the picture in this PSD"
+            }
+        }
+    }
+
     // Clean up
 
     var cleanTab by mutableStateOf(CleanTab.EMPTY); private set
     var cleanScanning by mutableStateOf(false); private set
     var emptyFolders by mutableStateOf<List<EmptyFolder>>(emptyList()); private set
     var largeFiles by mutableStateOf<List<FileItem>>(emptyList()); private set
+    /** Same-content groups, oldest first in each. */
+    var duplicates by mutableStateOf<List<List<FileItem>>>(emptyList()); private set
 
     fun openCleanup() {
         selected.clear()
@@ -460,8 +611,9 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
     fun pickCleanTab(t: CleanTab) {
         cleanTab = t
         selected.clear()
-        // Empty folders are safe to pick all at once; files are picked one by one
+        // Empty folders are safe to pick all at once; for duplicates, every copy but the oldest
         if (t == CleanTab.EMPTY) selected.addAll(emptyFolders.map { it.path })
+        if (t == CleanTab.DUPES) selected.addAll(duplicates.flatMap { it.drop(1) }.map { it.path })
     }
 
     private fun scanCleanup() {
@@ -472,6 +624,7 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
             }
             emptyFolders = empty
             largeFiles = large
+            duplicates = withContext(Dispatchers.IO) { runCatching { Cleanup.duplicates(Storage.root) }.getOrDefault(emptyList()) }
             cleanScanning = false
             if (overlay == Overlay.Cleanup) pickCleanTab(cleanTab)
         }
@@ -499,8 +652,9 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         val paths = selected.toList()
         selected.clear()
         run("Moving to Trash…") {
-            val failed = trash.moveIn(paths.map(::File))
+            val (keys, failed) = trash.moveInKeys(paths.map(::File))
             FileOps.reindex(getApplication(), paths)
+            undoKeys = keys
             if (failed == 0) "${items(paths.size)} moved to Trash" else "$failed couldn't be moved to Trash"
         }
         afterClean()
@@ -683,10 +837,27 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         val paths = selected.toList()
         selected.clear()
         run("Moving to Trash…") {
-            val failed = trash.moveIn(paths.map(::File))
+            val (keys, failed) = trash.moveInKeys(paths.map(::File))
             starredPathsMoved(paths)
             FileOps.reindex(getApplication(), paths)
+            undoKeys = keys
             if (failed == 0) "${items(paths.size)} moved to Trash" else "$failed couldn't be moved to Trash"
+        }
+    }
+
+    /** What the last delete moved to Trash, while its Undo button is showing. */
+    var undoKeys by mutableStateOf<List<String>>(emptyList())
+
+    fun undoDelete() {
+        val keys = undoKeys
+        undoKeys = emptyList()
+        message = null
+        if (keys.isEmpty()) return
+        run("Putting back…") {
+            val failed = trash.restoreKeys(keys)
+            val back = keys.size - failed
+            if (overlay == Overlay.Cleanup) viewModelScope.launch { scanCleanup() }
+            if (failed == 0) "${items(back)} put back" else "$back put back, $failed couldn't be"
         }
     }
 

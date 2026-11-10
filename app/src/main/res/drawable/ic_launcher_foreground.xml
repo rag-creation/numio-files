@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Placeholder icon: the soft Numio N on an amber folder, inside the 66dp safe circle.
-     To be swapped for RR's own Files icon. -->
+<!-- Files by Numio icon: RR's design (amber folder with the N. mark), drawn as clean vectors
+     on Android's 108 grid, inside the round crop. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp"
     android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFC21A" android:pathData="M35,32 H47 Q49,32 50.4,33.4 L54,37 H73 Q77,37 77,41 V72 Q77,76 73,76 H35 Q31,76 31,72 V36 Q31,32 35,32 Z" />
-    <path android:strokeColor="#FF0F0F0E" android:strokeWidth="2.2" android:strokeLineCap="round" android:pathData="M31,44 H77" />
-    <group android:translateY="7">
-        <path android:fillColor="#FF0F0F0E" android:strokeColor="#FF0F0F0E" android:strokeWidth="1.13" android:strokeLineJoin="round" android:pathData="M43.05,43.92 Q43.05,42.72 44.05,43.39 L49.77,47.21 Q50.77,47.88 49.80,48.59 L47.67,50.16 Q46.71,50.87 46.71,52.07 L46.71,56.72 Q46.71,57.92 45.51,57.92 L44.25,57.92 Q43.05,57.92 43.05,56.72 Z" />
-        <path android:fillColor="#FF0F0F0E" android:strokeColor="#FF0F0F0E" android:strokeWidth="1.13" android:strokeLineJoin="round" android:pathData="M54.96,44.25 Q54.96,43.06 56.15,43.06 L57.22,43.06 Q58.41,43.06 58.41,44.25 L58.41,56.59 Q58.41,57.79 57.43,57.10 L51.75,53.12 Q50.77,52.43 51.75,51.75 L53.97,50.22 Q54.96,49.54 54.96,48.34 Z" />
-        <path android:fillColor="#FF0F0F0E" android:pathData="M59.61,55.99 a2.13,2.13 0 1,1 4.26,0 a2.13,2.13 0 1,1 -4.26,0 Z" />
-    </group>
+    <!-- Back sheet, tab on the left -->
+    <path android:fillColor="#FFFFC21A" android:pathData="M29.6,41 V34.6 Q29.6,30 34.2,30 H44.6 Q46.4,30 47.6,31.4 L49.8,34.2 Q50.6,35.1 52,35.1 H70 V41 Z" />
+    <!-- Front sheet: a dark outline first makes the even gap, then the amber on top -->
+    <path android:fillColor="#FFFFC21A" android:strokeColor="#FF0F0F0E" android:strokeWidth="2.6"
+        android:strokeLineJoin="round" android:pathData="M27,46.2 Q27,42 31.6,41.6 H63.4 Q65,41.6 66,40.4 L68.6,37.2 Q69.8,35.8 71.6,35.8 H80 Q84,35.8 84,39.8 V72.6 Q84,76.6 80,76.6 H31 Q27,76.6 27,72.6 Z" />
+    <path android:fillColor="#FFFFC21A" android:pathData="M27,46.2 Q27,42 31.6,41.6 H63.4 Q65,41.6 66,40.4 L68.6,37.2 Q69.8,35.8 71.6,35.8 H80 Q84,35.8 84,39.8 V72.6 Q84,76.6 80,76.6 H31 Q27,76.6 27,72.6 Z" />
+    <!-- The N. mark, dark on amber -->
+    <path android:fillColor="#FF1A1400" android:pathData="M44.61,47.13 L54.61,53.49 L49.58,57.4 L49.58,67.75 L44.61,67.75 Z" />
+    <path android:fillColor="#FF1A1400" android:pathData="M60.76,47.13 L66.07,47.13 L66.07,67.75 L54.75,60.06 L60.76,55.37 Z" />
+    <path android:fillColor="#FF1A1400" android:pathData="M67.89,65.16 a2.66,2.66 0 1,1 5.32,0 a2.66,2.66 0 1,1 -5.32,0 Z" />
 </vector>

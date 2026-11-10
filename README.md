@@ -5,6 +5,8 @@
   </picture>
 </p>
 
+<p align="center"><img src="docs/files-icon.png" width="120" alt="Files icon" /></p>
+
 <h1 align="center">Files</h1>
 
 <p align="center">
@@ -39,21 +41,41 @@ Part of [Numio](https://getnumio.org) — small, honest apps made by a Keralite.
 
 ### 🏠 Home
 - ✅ Storage at a glance: used, free, and what's taking the space
+- ✅ SD cards and USB drives, when plugged in
 - ✅ Quick tiles: Images, Videos, Audio, Docs, Downloads, APKs, Archives, Trash
-- ✅ Recent files
+- ✅ Recent files, with previews
 
 ### 🗂️ Browse
-- ✅ Every folder on your phone, with a tappable path
+- ✅ Every folder, with a tappable path; jump between Internal, SD card and USB
+- ✅ List or grid view, per folder (photo folders open as a grid)
+- ✅ Previews: photos, video frames, APK icons, album art, PDF and Illustrator pages, Photoshop pictures
 - ✅ Sort by name, newest or largest — folders always first
-- ✅ New folder, show hidden files
+- ✅ Search every folder by name, with recent searches
 
 ### ✂️ Do things with files
-- ✅ Long-press to select, then **Copy, Move, Share, Rename or Delete**
-- ✅ Copy or move: pick files, open any folder, tap **Paste here**
+- ✅ Long-press to select, then **Copy, Move, Share, Rename, Zip or Delete**
+- ✅ Progress with **Cancel** for big jobs; nothing is ever left half-done
+- ✅ **Details**: size, dates, path; camera info and GPS warning for photos; app info for APKs
 - ✅ **Trash** — deleted things wait 30 days so you can restore them
-- ✅ **Starred** — keep the files and folders you use most one tap away
-- ✅ Search every folder by name
-- ✅ Opens files in your favourite apps
+- ✅ **Starred** — your favourite files and folders one tap away
+
+### 📖 Opens files right inside the app
+- ✅ **ZIP**: look inside, extract, make your own
+- ✅ **Text, Markdown, CSV, JSON, HTML, code** — with editing for text files
+- ✅ **Word (.docx) and Excel (.xlsx)** reader
+- ✅ **Apple Pages, Numbers, Keynote** — from the preview Apple saves inside
+- ✅ **Illustrator (.ai)** — opens as PDF, with **Save as PDF**
+- ✅ **Photoshop (.psd)** — the flat picture, with **Save as PNG**
+
+### 🧹 Clean up
+- ✅ **Empty folders** — only truly empty ones; hidden files count, Android/ is never touched
+- ✅ **Duplicates** — same content checked by fingerprint, not just by name
+- ✅ **Large files** and **APK files**, to Trash
+
+### 🔒 Privacy
+- ✅ **Lock Files** with your fingerprint or the phone's PIN
+- ✅ **Lock hidden files** — they stay hidden until you unlock them
+- ✅ Starred folders as **shortcuts** on Home; Trash keeps things 7, 30 or 90 days
 
 ### 🎨 Numio look
 - ✅ Dark, light, or follow the phone

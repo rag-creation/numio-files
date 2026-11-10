@@ -92,4 +92,68 @@ object Cleanup {
         }
         return out.sortedByDescending { it.size }.take(limit)
     }
+
+    /**
+     * Groups of files with exactly the same content (same size, then the same
+     * SHA-256 fingerprint). Oldest first in each group; biggest waste first.
+     * Hidden files and Android/ are skipped.
+     */
+    fun duplicates(root: File, minBytes: Long = 50 * 1024, check: () -> Unit = {}): List<List<FileItem>> {
+        val bySize = HashMap<Long, MutableList<File>>()
+        val stack = ArrayDeque<File>()
+        stack.add(root)
+        while (stack.isNotEmpty()) {
+            check()
+            val dir = stack.removeLast()
+            for (f in dir.listFiles() ?: continue) {
+                if (f.name.startsWith(".")) continue
+                if (dir == root && f.name == "Android") continue
+                if (f.isDirectory) {
+                    if (!isLink(f)) stack.add(f)
+                } else {
+                    val n = f.length()
+                    if (n >= minBytes) bySize.getOrPut(n) { ArrayList() }.add(f)
+                }
+            }
+        }
+        val groups = ArrayList<List<FileItem>>()
+        for ((_, same) in bySize) {
+            if (same.size < 2) continue
+            // Quick look at the start and end first, then the full fingerprint
+            val quick = same.groupBy { runCatching { fingerprint(it, quick = true) }.getOrNull() }
+            for ((qk, q) in quick) {
+                if (qk == null || q.size < 2) continue
+                check()
+                val full = q.groupBy { runCatching { fingerprint(it, quick = false) }.getOrNull() }
+                for ((fk, g) in full) {
+                    if (fk == null || g.size < 2) continue
+                    groups.add(g.sortedBy { it.lastModified() }.map { FileItem(it.absolutePath, it.name, false, it.length(), it.lastModified()) })
+                }
+            }
+        }
+        return groups.sortedByDescending { it[0].size * (it.size - 1) }
+    }
+
+    private fun fingerprint(f: File, quick: Boolean): String {
+        val md = java.security.MessageDigest.getInstance("SHA-256")
+        java.io.RandomAccessFile(f, "r").use { raf ->
+            val buf = ByteArray(64 * 1024)
+            if (quick) {
+                val n1 = raf.read(buf)
+                if (n1 > 0) md.update(buf, 0, n1)
+                if (raf.length() > buf.size * 2) {
+                    raf.seek(raf.length() - buf.size)
+                    val n2 = raf.read(buf)
+                    if (n2 > 0) md.update(buf, 0, n2)
+                }
+            } else {
+                while (true) {
+                    val n = raf.read(buf)
+                    if (n < 0) break
+                    md.update(buf, 0, n)
+                }
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
 }

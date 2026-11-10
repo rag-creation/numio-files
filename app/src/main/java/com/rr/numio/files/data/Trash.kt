@@ -11,7 +11,7 @@ data class TrashEntry(val file: File, val originalPath: String, val deletedAt: L
 
 /**
  * Deleting moves things into the app's own folder on the same storage, so it is
- * instant and can be undone. Kept 30 days. Note: Android empties this folder if
+ * instant and can be undone. Kept 7, 30 or 90 days (Settings). Note: Android empties this folder if
  * Files is uninstalled.
  */
 class Trash(private val context: Context) {
@@ -44,8 +44,12 @@ class Trash(private val context: Context) {
     fun size(): Long = entries().sumOf { if (it.file.isDirectory) it.file.walk().sumOf { f -> f.length() } else it.file.length() }
 
     /** Moves into Trash. Returns how many failed. */
-    fun moveIn(files: List<File>): Int {
-        val d = dir ?: return files.size
+    fun moveIn(files: List<File>): Int = moveInKeys(files).second
+
+    /** Moves into Trash; returns the Trash names of what moved (for Undo) and how many failed. */
+    fun moveInKeys(files: List<File>): Pair<List<String>, Int> {
+        val d = dir ?: return emptyList<String>() to files.size
+        val moved = ArrayList<String>()
         val index = readIndex()
         var failed = 0
         val now = System.currentTimeMillis()
@@ -53,11 +57,17 @@ class Trash(private val context: Context) {
             val key = uniqueName("${now}_${f.name}") { File(d, it).exists() }
             val dest = File(d, key)
             val ok = f.renameTo(dest) || (runCatching { f.copyRecursively(dest) }.getOrDefault(false) && f.deleteRecursively())
-            if (ok) index.put(key, JSONObject().put("from", f.absolutePath).put("at", now)) else failed++
+            if (ok) {
+                index.put(key, JSONObject().put("from", f.absolutePath).put("at", now))
+                moved.add(key)
+            } else failed++
         }
         writeIndex(index)
-        return failed
+        return moved to failed
     }
+
+    /** Undo: puts back exactly what one delete moved in. */
+    fun restoreKeys(keys: List<String>): Int = restore(entries().filter { it.file.name in keys })
 
     /** Puts things back where they were; a taken name gets " (1)". */
     fun restore(entries: List<TrashEntry>): Int {
@@ -83,9 +93,9 @@ class Trash(private val context: Context) {
         writeIndex(index)
     }
 
-    /** Things older than 30 days go for good. */
-    fun purgeOld() {
-        val cutoff = System.currentTimeMillis() - 30L * 24 * 60 * 60 * 1000
+    /** Things older than [days] go for good. */
+    fun purgeOld(days: Int = 30) {
+        val cutoff = System.currentTimeMillis() - days.toLong() * 24 * 60 * 60 * 1000
         deleteForever(entries().filter { it.deletedAt < cutoff })
     }
 }
