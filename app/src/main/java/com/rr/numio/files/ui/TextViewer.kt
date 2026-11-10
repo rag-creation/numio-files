@@ -223,8 +223,19 @@ fun TableView(rows: List<List<String>>) {
         return
     }
     val cols = rows.maxOf { it.size }.coerceAtLeast(1)
-    val widths = remember(rows) {
-        (0 until cols).map { c -> (rows.take(200).maxOf { it.getOrNull(c)?.length ?: 0 }.coerceIn(3, 30) * 8 + 24).dp }
+    // Measure the real text (with the phone's own font size), so short values like
+    // dates never wrap; long notes are capped and wrap within their cell.
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val widths = remember(rows, density) {
+        val style = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        (0 until cols).map { c ->
+            val widest = rows.take(200).maxOf { r ->
+                val t = r.getOrNull(c).orEmpty()
+                if (t.isEmpty()) 0 else measurer.measure(t, style, softWrap = false, maxLines = 1).size.width
+            }
+            with(density) { widest.toDp() }.coerceIn(48.dp, 260.dp) + 21.dp
+        }
     }
     Column(
         Modifier
