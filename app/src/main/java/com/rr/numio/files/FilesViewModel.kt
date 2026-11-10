@@ -552,6 +552,24 @@ class FilesViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Saves an SVG drawn as a PNG next to it (in Download if it came from another app). */
+    fun saveSvgPng(path: String, outside: Boolean) {
+        val src = File(path)
+        val parent = if (outside) Storage.downloads else (src.parentFile ?: Storage.downloads)
+        run("Saving PNG…") {
+            val dest = File(parent, uniqueName(src.name.substringBeforeLast('.') + ".png") { File(parent, it).exists() })
+            try {
+                val bmp = com.rr.numio.files.data.SvgFiles.render(src, 2048) ?: throw IllegalStateException()
+                dest.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                FileOps.reindex(getApplication(), listOf(dest.absolutePath))
+                "Saved ${dest.name}" + if (outside) " in Download" else ""
+            } catch (e: Throwable) {
+                dest.delete()
+                "Couldn't draw this SVG"
+            }
+        }
+    }
+
     /** Saves the flat picture of a PSD as a PNG next to it. */
     fun savePsdPng(path: String) {
         selected.clear()

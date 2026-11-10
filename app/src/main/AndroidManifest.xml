@@ -86,6 +86,7 @@
                 <data android:mimeType="application/json" />
                 <data android:mimeType="application/xml" />
                 <data android:mimeType="application/x-yaml" />
+                <data android:mimeType="image/svg+xml" />
             </intent-filter>
         </activity>
 

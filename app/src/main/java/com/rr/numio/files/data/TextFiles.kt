@@ -3,7 +3,7 @@ package com.rr.numio.files.data
 import java.io.File
 
 /** How Files shows a text file. */
-enum class TextKind { PLAIN, MARKDOWN, CSV, JSON, HTML }
+enum class TextKind { PLAIN, MARKDOWN, CSV, JSON, HTML, SVG }
 
 /** Reading text files for the built-in viewer. Pure Kotlin, so it is easy to test. */
 object TextFiles {
@@ -13,7 +13,7 @@ object TextFiles {
     const val MAX_EDIT_BYTES = 1L * 1024 * 1024
 
     private val plain = setOf(
-        "txt", "log", "ini", "cfg", "conf", "properties", "yaml", "yml", "toml", "xml", "svg", "srt", "vtt",
+        "txt", "log", "ini", "cfg", "conf", "properties", "yaml", "yml", "toml", "xml", "srt", "vtt",
         "kt", "kts", "java", "gradle", "py", "js", "ts", "css", "sh", "c", "h", "cpp", "go", "rs", "swift",
         "sql", "tsv", "env", "gitignore", "nfo", "rtf", "tex", "vcf", "ics",
     )
@@ -23,6 +23,7 @@ object TextFiles {
         "csv" -> TextKind.CSV
         "json", "geojson" -> TextKind.JSON
         "html", "htm", "xhtml" -> TextKind.HTML
+        "svg" -> TextKind.SVG
         in plain -> TextKind.PLAIN
         else -> if (name.equals("README", true) || name.equals("LICENSE", true)) TextKind.PLAIN else null
     }

@@ -56,7 +56,11 @@ object Thumbs {
         val f = File(path)
         val bmp = try {
             when (categoryOf(f.name)) {
-                Category.IMAGES -> if (extOf(f.name) == "psd") psd(f, PX) else image(f)
+                Category.IMAGES -> when (extOf(f.name)) {
+                    "psd" -> psd(f, PX)
+                    "svg" -> SvgFiles.render(f, PX)
+                    else -> image(f)
+                }
                 Category.VIDEOS -> video(f)
                 Category.AUDIO -> albumArt(f)
                 Category.APKS -> apkIcon(context, f)

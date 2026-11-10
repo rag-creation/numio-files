@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -83,6 +84,11 @@ fun TextViewerScreen(vm: FilesViewModel, open: Overlay.Text) {
 
     Column(Modifier.fillMaxSize()) {
         TitleHeader(file.name, onBack = vm::closeOverlay) {
+            if (kind == TextKind.SVG && mode == Mode.NICE) {
+                TextButton(onClick = { vm.saveSvgPng(open.path, open.outside) }) {
+                    Text("Save PNG", color = Numio.AmberText, fontWeight = FontWeight.Bold)
+                }
+            }
             if (mode == Mode.EDIT && draft != null && draft != loaded?.text) {
                 TextButton(onClick = {
                     val text = draft ?: return@TextButton
@@ -100,7 +106,7 @@ fun TextViewerScreen(vm: FilesViewModel, open: Overlay.Text) {
             modes.forEach { m ->
                 val on = m == mode
                 Text(
-                    m.label,
+                    if (m == Mode.NICE && kind == TextKind.SVG) "Picture" else m.label,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (on) Numio.OnAmber else Numio.Text,
@@ -135,6 +141,7 @@ fun TextViewerScreen(vm: FilesViewModel, open: Overlay.Text) {
                         TextKind.CSV -> CsvTable(l.text)
                         TextKind.JSON -> Lines(prettyJson(l.text) ?: l.text)
                         TextKind.HTML -> Readable(l.text)
+                        TextKind.SVG -> SvgPicture(open.path, l.text)
                         TextKind.PLAIN -> Lines(l.text)
                     }
                 }
@@ -403,5 +410,34 @@ private fun mdInline(s: String): AnnotatedString {
             }
             append(s.substring(last))
         }
+    }
+}
+
+/** An SVG drawn as a picture, on a light checkerboard so transparent parts show. */
+@Composable
+private fun SvgPicture(path: String, text: String) {
+    val bmp by produceState<android.graphics.Bitmap?>(null, path, text) {
+        value = withContext(Dispatchers.IO) { runCatching { com.rr.numio.files.data.SvgFiles.render(File(path), 1600) }.getOrNull() }
+    }
+    val b = bmp
+    if (b == null) {
+        EmptyNote("Drawing…", "If this stays, the SVG may use features Files can't draw. Source shows its code.")
+        return
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+        androidx.compose.foundation.Image(
+            b.asImageBitmap(),
+            contentDescription = "SVG picture",
+            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFF6F4EE)),
+        )
+        Text(
+            "${b.width} × ${b.height} preview",
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }
