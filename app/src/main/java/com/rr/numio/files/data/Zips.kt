@@ -2,6 +2,7 @@ package com.rr.numio.files.data
 
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.file.attribute.FileTime
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
@@ -20,18 +21,20 @@ object Zips {
     /** Every file and folder in the ZIP, including folders only implied by paths. */
     fun entries(zip: File): List<ZipNode> {
         val nodes = LinkedHashMap<String, ZipNode>()
+        val times = ZipTimes.read(zip)
         ZipFile(zip).use { zf ->
             for (e in zf.entries()) {
                 val path = clean(e.name)
                 if (path.isEmpty() || path.startsWith("__MACOSX")) continue
+                val time = times[e.name] ?: e.time
                 // Parent folders, even if the ZIP has no entry for them
                 var slash = path.indexOf('/')
                 while (slash > 0) {
                     val dir = path.substring(0, slash)
-                    if (dir !in nodes) nodes[dir] = ZipNode(dir, true, 0, e.time)
+                    if (dir !in nodes) nodes[dir] = ZipNode(dir, true, 0, time)
                     slash = path.indexOf('/', slash + 1)
                 }
-                nodes[path] = ZipNode(path, e.isDirectory, if (e.isDirectory) 0 else e.size.coerceAtLeast(0), e.time)
+                nodes[path] = ZipNode(path, e.isDirectory, if (e.isDirectory) 0 else e.size.coerceAtLeast(0), time)
             }
         }
         return nodes.values.toList()
@@ -56,6 +59,7 @@ object Zips {
         val root = target.canonicalPath + File.separator
         val prefix = if (inner.isEmpty()) "" else "$inner/"
         var failed = 0
+        val times = ZipTimes.read(zip)
         ZipFile(zip).use { zf ->
             fun wants(path: String) =
                 if (chosen.isEmpty()) path.startsWith(prefix) else chosen.any { path == it || path.startsWith("$it/") }
@@ -81,7 +85,8 @@ object Zips {
                         }
                         p?.start(out.name)
                         zf.getInputStream(e).use { input -> FileOutputStream(out).use { output -> copy(input, output, p) } }
-                        if (e.time > 0) out.setLastModified(e.time)
+                        val time = times[e.name] ?: e.time
+                        if (time > 0) out.setLastModified(time)
                     }
                 } catch (ex: CancelledJob) {
                     if (out.isFile) out.delete() // the half-written file
@@ -115,11 +120,11 @@ object Zips {
                     if (f.absolutePath == dest.absolutePath) return@forEach
                     val rel = f.relativeTo(base).invariantSeparatorsPath
                     if (f.isDirectory) {
-                        zos.putNextEntry(ZipEntry("$rel/").apply { time = f.lastModified() })
+                        zos.putNextEntry(ZipEntry("$rel/").apply { lastModifiedTime = FileTime.fromMillis(f.lastModified()) })
                         zos.closeEntry()
                     } else {
                         p?.start(f.name)
-                        zos.putNextEntry(ZipEntry(rel).apply { time = f.lastModified() })
+                        zos.putNextEntry(ZipEntry(rel).apply { lastModifiedTime = FileTime.fromMillis(f.lastModified()) })
                         f.inputStream().use { copy(it, zos, p) }
                         zos.closeEntry()
                     }
